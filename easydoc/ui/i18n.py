@@ -6,7 +6,7 @@ import os
 
 _STRINGS: dict[str, tuple[str, str]] = {
     # key: (en, ja)
-    "app.title": ("easydoc PDF Editor", "easydoc PDF エディタ"),
+    "app.title": ("EasyDoc", "EasyDoc"),
     "menu.file": ("&File", "ファイル(&F)"),
     "menu.edit": ("&Edit", "編集(&E)"),
     "menu.page": ("&Page", "ページ(&P)"),
@@ -14,6 +14,27 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "menu.tools": ("&Tools", "ツール(&T)"),
     "menu.help": ("&Help", "ヘルプ(&H)"),
     "act.new": ("&New", "新規作成(&N)"),
+    "act.split_view": ("Split &View (side by side)", "スプリット表示(左右に並べる)(&V)"),
+    "act.split_view_close": ("Close split view", "スプリット表示を閉じる"),
+    "lbl.snap": ("Snap to guides", "ガイドにスナップ"),
+    "tip.snap": ("While moving, align edges to other text/shapes and show guide lines",
+                 "移動中、他の文字・図形の端にガイドを表示して吸着します"),
+    "act.check_update": ("Check for &Updates…", "アップデートを確認(&U)…"),
+    "act.auto_update": ("Check for updates at startup", "起動時にアップデートを確認"),
+    "dlg.update": ("Update available", "アップデートがあります"),
+    "msg.update_available": ("EasyDoc {0} is available (you have {1}).", "EasyDoc {0} が公開されています(現在 {1})。"),
+    "msg.update_none": ("You are using the latest version ({0}).", "最新バージョン({0})をお使いです。"),
+    "msg.update_failed": ("Could not check for updates:\n{0}", "アップデートを確認できませんでした:\n{0}"),
+    "btn.update_download": ("Download && open", "ダウンロードして開く"),
+    "btn.update_page": ("Release page", "リリースページ"),
+    "btn.update_skip": ("Skip this version", "このバージョンをスキップ"),
+    "btn.update_later": ("Later", "あとで"),
+    "msg.update_noasset": ("No package for this OS was found in the release; opening the release page.",
+                           "このOS向けのパッケージが見つからないため、リリースページを開きます。"),
+    "msg.update_downloading": ("Downloading {0}…", "{0} をダウンロード中…"),
+    "msg.update_done": ("Downloaded to {0}.\nQuit EasyDoc and install it (macOS: drag the app to Applications; Windows/Linux: extract and replace the old folder).",
+                        "{0} にダウンロードしました。\nEasyDoc を終了してから入れ替えてください(macOS: アプリをアプリケーションへドラッグ / Windows・Linux: 展開して旧フォルダと置き換え)。"),
+    "act.close_tab": ("Close &Tab", "タブを閉じる(&T)"),
     "act.open": ("&Open…", "開く(&O)…"),
     "act.save": ("&Save", "上書き保存(&S)"),
     "act.saveas": ("Save &As / Export…", "名前を付けて保存 / 規格書き出し(&A)…"),
@@ -43,8 +64,8 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "tool.line": ("Line", "直線"),
     "tool.arrow": ("Arrow", "矢印"),
     "tool.erase": ("Erase drawing", "図形を消去"),
-    "tip.select": ("Click text to edit it, click a shape to select it (Delete removes it)",
-                   "テキストをクリックで編集、図形をクリックで選択(Deleteで削除)"),
+    "tip.select": ("Click text to edit it, drag text or a shape to move it (Delete removes a selected shape)",
+                   "テキストをクリックで編集、テキスト・図形をドラッグで移動(選択した図形はDeleteで削除)"),
     "tip.text": ("Click where new text should start", "新しいテキストの開始位置をクリック"),
     "tip.shape": ("Drag to draw", "ドラッグして描画"),
     "tip.erase": ("Click an existing vector drawing to remove it", "既存のベクター図形をクリックで消去"),
@@ -105,8 +126,8 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "msg.extract_done": ("Extracted {0} pages to {1}", "{0} ページを {1} に抽出しました"),
     "msg.merge_done": ("Added {0} pages", "{0} ページを追加しました"),
     "msg.need_doc": ("Open or create a document first", "先にドキュメントを開くか作成してください"),
-    "msg.about": ("easydoc {0}\nLightweight cross-platform PDF editor.\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}",
-                  "easydoc {0}\n軽量クロスプラットフォームPDFエディタ\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}"),
+    "msg.about": ("EasyDoc {0}\nLightweight cross-platform PDF editor.\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}",
+                  "EasyDoc {0}\n軽量クロスプラットフォームPDFエディタ\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}"),
     "filter.pdf": ("PDF files (*.pdf);;All files (*)", "PDFファイル (*.pdf);;すべてのファイル (*)"),
     "filter.open": ("Documents (*.pdf *.xps *.epub *.png *.jpg *.jpeg *.tiff *.svg);;All files (*)",
                     "ドキュメント (*.pdf *.xps *.epub *.png *.jpg *.jpeg *.tiff *.svg);;すべてのファイル (*)"),
@@ -114,7 +135,7 @@ _STRINGS: dict[str, tuple[str, str]] = {
     # printing
     "act.print": ("&Print…", "印刷(&P)…"),
     "act.vprinter": ("Receive print jobs (virtual printer)", "印刷を受け付ける(仮想プリンター)"),
-    "act.vprinter_setup": ("Set up the \"easydoc PDF\" printer…", "「easydoc PDF」プリンターを設定…"),
+    "act.vprinter_setup": ("Set up the \"EasyDoc PDF\" printer…", "「EasyDoc PDF」プリンターを設定…"),
     "msg.printed": ("Sent {0} pages to the printer", "{0} ページをプリンターに送信しました"),
     "msg.print_failed": ("Printing failed:\n{0}", "印刷に失敗しました:\n{0}"),
     "msg.vprinter_on": ("Virtual printer listening on 127.0.0.1:{0}", "仮想プリンター待受中 127.0.0.1:{0}"),
@@ -125,12 +146,12 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "msg.job_failed": ("A print job could not be converted:\n{0}", "印刷ジョブを変換できませんでした:\n{0}"),
     "dlg.vprinter": ("Virtual printer setup", "仮想プリンターの設定"),
     "dlg.vprinter_intro": (
-        "Print from Word, Excel, PowerPoint or any other application straight into easydoc.\n"
-        "easydoc listens on a local network port; the operating system needs a printer queue that "
+        "Print from Word, Excel, PowerPoint or any other application straight into EasyDoc.\n"
+        "EasyDoc listens on a local network port; the operating system needs a printer queue that "
         "sends its output to that port. Create it once with the command below, then keep "
         "\"Receive print jobs\" switched on while printing.",
-        "Word・Excel・PowerPoint など任意のアプリの「印刷」から、easydoc に直接 PDF を送れます。\n"
-        "easydoc はローカルのネットワークポートで待ち受けます。OS 側に、そのポートへ出力するプリンター"
+        "Word・Excel・PowerPoint など任意のアプリの「印刷」から、EasyDoc に直接 PDF を送れます。\n"
+        "EasyDoc はローカルのネットワークポートで待ち受けます。OS 側に、そのポートへ出力するプリンター"
         "キューを 1 回だけ作成してください(下のコマンド)。印刷するときは「印刷を受け付ける」をオンにしておきます。"),
     "dlg.vprinter_port": ("Port", "ポート"),
     "dlg.vprinter_cmd": ("Command (run as administrator / with sudo):", "コマンド(管理者権限 / sudo で実行):"),
@@ -147,9 +168,9 @@ _STRINGS: dict[str, tuple[str, str]] = {
         "XPS や PostScript で届いた場合も自動変換します(PostScript は Ghostscript が必要)。"),
     "dlg.vprinter_note_mac": (
         "macOS: creates a raw CUPS queue; applications send PDF directly. "
-        "(macOS can also \"Save as PDF\" from any print dialog, then open the file in easydoc.)",
+        "(macOS can also \"Save as PDF\" from any print dialog, then open the file in EasyDoc.)",
         "macOS: raw の CUPS キューを作成します。アプリは PDF をそのまま送ります。"
-        "(macOS の印刷ダイアログ「PDF として保存」→ easydoc で開く、でも同じことができます)"),
+        "(macOS の印刷ダイアログ「PDF として保存」→ EasyDoc で開く、でも同じことができます)"),
     "dlg.vprinter_note_linux": (
         "Linux: creates a raw CUPS queue; GTK/Qt/LibreOffice applications send PDF directly. "
         "PostScript jobs are converted with Ghostscript.",

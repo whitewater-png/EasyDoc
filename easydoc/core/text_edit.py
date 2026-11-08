@@ -147,3 +147,23 @@ def add_text(pdf: PdfDocument, pno: int, point: pymupdf.Point, text: str,
     page = pdf.page(pno)
     write_text(page, point, text, font_info, size, color)
     pdf.mutated()
+
+
+def move_span(pdf: PdfDocument, span: TextSpan, dx: float, dy: float,
+              registry: Optional[FontRegistry] = None) -> None:
+    """Move one text span by (dx, dy) page units: remove the glyphs and rewrite
+    the same text (same size/colour, best matching font) at the new origin."""
+    registry = registry or default_registry()
+    page = pdf.page(span.page)
+    font_info = registry.match_pdf_font(span.font, span.flags)
+    pdf.snapshot()
+    box = pymupdf.Rect(span.bbox)
+    box.x0 += 0.5
+    box.x1 -= 0.5
+    page.add_redact_annot(box)
+    page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
+                          graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
+                          text=pymupdf.PDF_REDACT_TEXT_REMOVE)
+    write_text(page, pymupdf.Point(span.origin.x + dx, span.origin.y + dy), span.text,
+               font_info, span.size, span.color)
+    pdf.mutated()

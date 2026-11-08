@@ -1,8 +1,9 @@
 """Application look: Fusion style with a light, modern palette and stylesheet."""
 from __future__ import annotations
 
-from PySide6.QtGui import QColor, QPalette
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QEvent, QObject, QPoint
+from PySide6.QtGui import QColor, QCursor, QPalette
+from PySide6.QtWidgets import QApplication, QToolTip, QWidget
 
 ACCENT = "#2f6fed"
 BG = "#f4f6fa"
@@ -90,3 +91,24 @@ def apply_theme(app: QApplication) -> None:
     pal.setColor(QPalette.PlaceholderText, QColor(MUTED))
     app.setPalette(pal)
     app.setStyleSheet(QSS)
+
+
+class _TooltipPlacer(QObject):
+    """Show tooltips right below-right of the mouse pointer.
+
+    Qt anchors a tooltip to the widget rect on some platforms (notably macOS
+    with tool buttons), which can put it far away from the cursor."""
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        if event.type() == QEvent.ToolTip and isinstance(obj, QWidget):
+            text = obj.toolTip()
+            if text:
+                QToolTip.showText(QCursor.pos() + QPoint(14, 18), text, obj)
+                return True
+        return False
+
+
+def install_tooltip_placer(app: QApplication) -> None:
+    placer = _TooltipPlacer(app)
+    app.installEventFilter(placer)
+    app._tooltip_placer = placer  # keep a reference

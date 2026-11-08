@@ -6,13 +6,13 @@ from pathlib import Path
 from typing import Optional
 
 import pymupdf
-from PySide6.QtCore import QSettings, Qt, QThread, Signal
+from PySide6.QtCore import QSettings, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDragEnterEvent, QDropEvent, QKeySequence
-from PySide6.QtWidgets import (QDialog, QDoubleSpinBox, QFileDialog, QLabel, QMainWindow, QMessageBox,
-                               QSizePolicy, QSplitter, QToolBar, QWidget)
+from PySide6.QtWidgets import (QCheckBox, QDialog, QDoubleSpinBox, QFileDialog, QLabel, QMainWindow, QMessageBox,
+                               QSizePolicy, QSplitter, QTabBar, QToolBar, QVBoxLayout, QWidget)
 
 from .. import __version__
-from ..core import pages, printserver, shapes, standards, text_edit
+from ..core import pages, printserver, shapes, standards, text_edit, updater
 from ..core.document import PdfDocument
 from ..core.fonts import FontRegistry, default_registry
 from . import printing
@@ -21,6 +21,8 @@ from .dialogs import (ColorButton, ExtractDialog, FontCombo, InsertPageDialog, M
 from .i18n import tr
 from .icons import icon
 from .page_view import PageView, Tool
+from .split_pane import SplitPane
+from .update_dialog import UpdateDialog
 from .thumbnails import ThumbnailList
 
 
@@ -38,6 +40,20 @@ class _FontScanThread(QThread):
             self.done.emit()
 
 
+class _UpdateThread(QThread):
+    found = Signal(object)   # updater.Release or None
+    failed = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def run(self) -> None:  # pragma: no cover - network thread
+        try:
+            self.found.emit(updater.check())
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(str(exc))
+
+
 class MainWindow(QMainWindow):
     # Print jobs arrive on a server thread; marshal them onto the GUI thread.
     _job_received = Signal(str)
@@ -49,7 +65,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(tr("app.title"))
         self.resize(1400, 900)
         self.setAcceptDrops(True)
-        self.pdf: Optional[PdfDocument] = None
+        self.pdf: Optional[PdfDocument] = None  # the document of the current tab
+        self.docs: list[PdfDocument] = []       # one entry per tab, in tab order
         self.registry = registry or default_registry(scan=False)
         self.settings = settings or QSettings("easydoc", "easydoc")
         self.print_server: Optional[printserver.PrintServer] = None
@@ -59,9 +76,33 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Horizontal, self)
         splitter.addWidget(self.thumbs)
         splitter.addWidget(self.view)
+        self.split_pane = SplitPane(self)
+        self.split_pane.hide()
+        splitter.addWidget(self.split_pane)
         splitter.setStretchFactor(1, 1)
+        splitter.setStretchFactor(2, 1)
+        splitter.setCollapsible(1, False)
+        self.splitter = splitter
         splitter.setHandleWidth(1)
-        self.setCentralWidget(splitter)
+
+        self.tabbar = QTabBar(self)
+        self.tabbar.setTabsClosable(True)
+        self.tabbar.setMovable(True)
+        self.tabbar.setExpanding(False)
+        self.tabbar.setDocumentMode(True)
+        self.tabbar.setUsesScrollButtons(True)
+        self.tabbar.setElideMode(Qt.ElideMiddle)
+        self.tabbar.hide()
+        central = QWidget(self)
+        lay = QVBoxLayout(central)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self.tabbar)
+        lay.addWidget(splitter, 1)
+        self.setCentralWidget(central)
+        self.tabbar.currentChanged.connect(self._on_tab_changed)
+        self.tabbar.tabCloseRequested.connect(self.close_tab)
+        self.tabbar.tabMoved.connect(lambda a, b: self.docs.insert(b, self.docs.pop(a)))
 
         self.drop_hint = QLabel(tr("lbl.drop_hint"), self.view)
         self.drop_hint.setAlignment(Qt.AlignCenter)
@@ -77,12 +118,20 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.status_page)
         self.statusBar().addPermanentWidget(self.status_zoom)
 
-        self.view.span_clicked.connect(self._edit_span)
-        self.view.text_point_clicked.connect(self._new_text)
-        self.view.shape_drawn.connect(self._shape_drawn)
-        self.view.annot_selected.connect(lambda x: self.act_delete_sel.setEnabled(x >= 0))
-        self.view.annot_moved.connect(self._annot_moved)
-        self.view.drawing_clicked.connect(self._erase_drawing)
+        self._active_view = self.view
+        for v in (self.view, self.split_pane.view):
+            v.span_clicked.connect(lambda sp, v=v: self._edit_span(sp, v))
+            v.text_point_clicked.connect(lambda pt, v=v: self._new_text(pt, v))
+            v.shape_drawn.connect(lambda k, a, b, v=v: self._shape_drawn(k, a, b, v))
+            v.annot_selected.connect(lambda x, v=v: self._on_annot_selected(x, v))
+            v.annot_moved.connect(lambda x, dx, dy, v=v: self._annot_moved(x, dx, dy, v))
+            v.drawing_clicked.connect(lambda d, v=v: self._erase_drawing(d, v))
+            v.span_moved.connect(lambda sp, dx, dy, v=v: self._span_moved(sp, dx, dy, v))
+            v.drawing_moved.connect(lambda d, dx, dy, v=v: self._drawing_moved(d, dx, dy, v))
+            v.pressed.connect(lambda v=v: self._set_active_view(v))
+        self.view.files_dropped.connect(self.open_paths)
+        self.thumbs.files_dropped.connect(self.open_paths)
+        self.split_pane.view.files_dropped.connect(self.open_paths)
         self.view.zoom_changed.connect(lambda z: self.status_zoom.setText(tr("lbl.zoom", int(z * 100))))
         self.thumbs.page_activated.connect(self._goto_page)
         self.thumbs.reorder_requested.connect(self._reorder)
@@ -117,6 +166,7 @@ class MainWindow(QMainWindow):
 
         self.act_new = act("act.new", self.new_document, QKeySequence.New, icon_name="new")
         self.act_open = act("act.open", self.open_dialog, QKeySequence.Open, icon_name="open")
+        self.act_close_tab = act("act.close_tab", lambda: self.close_tab(self.tabbar.currentIndex()), "Ctrl+W")
         self.act_save = act("act.save", self.save, QKeySequence.Save, icon_name="save")
         self.act_saveas = act("act.saveas", self.save_as, QKeySequence.SaveAs, icon_name="export")
         self.act_print = act("act.print", self.print_document, QKeySequence.Print, icon_name="print")
@@ -138,10 +188,16 @@ class MainWindow(QMainWindow):
         self.act_split = act("act.split", self.split_dialog, "Ctrl+Shift+S", icon_name="split")
         self.act_zoom_in = act("act.zoom_in", lambda: self.view.set_zoom(self.view.zoom * 1.25), QKeySequence.ZoomIn, icon_name="zoom_in")
         self.act_zoom_out = act("act.zoom_out", lambda: self.view.set_zoom(self.view.zoom / 1.25), QKeySequence.ZoomOut, icon_name="zoom_out")
+        self.act_split_view = act("act.split_view", None, "Ctrl+\\", checkable=True, icon_name="split_view")
+        self.act_split_view.toggled.connect(self._toggle_split_view)
         self.act_zoom_fit = act("act.zoom_fit", self.view.fit_width, "Ctrl+0", icon_name="zoom_fit")
         self.act_zoom_100 = act("act.zoom_100", lambda: self.view.set_zoom(1.0), "Ctrl+1")
         self.act_add_font = act("act.add_font", self.add_font_file, icon_name="font")
         self.act_about = act("act.about", self.about)
+        self.act_check_update = act("act.check_update", lambda: self.check_for_updates(silent=False))
+        self.act_auto_update = act("act.auto_update", None, checkable=True)
+        self.act_auto_update.setChecked(self.settings.value("update/auto", True, type=bool))
+        self.act_auto_update.toggled.connect(lambda on: self.settings.setValue("update/auto", on))
 
         self.tool_group = QActionGroup(self)
         self.tool_actions: dict[Tool, QAction] = {}
@@ -157,7 +213,7 @@ class MainWindow(QMainWindow):
     def _build_menus(self) -> None:
         mb = self.menuBar()
         m = mb.addMenu(tr("menu.file"))
-        for a in (self.act_new, self.act_open, self.act_save, self.act_saveas, None, self.act_print,
+        for a in (self.act_new, self.act_open, self.act_close_tab, self.act_save, self.act_saveas, None, self.act_print,
                   self.act_vprinter, self.act_vprinter_setup, None, self.act_merge, None, self.act_quit):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu(tr("menu.edit"))
@@ -168,14 +224,17 @@ class MainWindow(QMainWindow):
                   self.act_move_up, self.act_move_down, None, self.act_merge, self.act_extract, self.act_split):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu(tr("menu.view"))
-        for a in (self.act_zoom_in, self.act_zoom_out, self.act_zoom_fit, self.act_zoom_100):
-            m.addAction(a)
+        for a in (self.act_zoom_in, self.act_zoom_out, self.act_zoom_fit, self.act_zoom_100, None, self.act_split_view):
+            m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu(tr("menu.tools"))
         for a in self.tool_actions.values():
             m.addAction(a)
         m.addSeparator()
         m.addAction(self.act_add_font)
         m = mb.addMenu(tr("menu.help"))
+        m.addAction(self.act_check_update)
+        m.addAction(self.act_auto_update)
+        m.addSeparator()
         m.addAction(self.act_about)
 
     @staticmethod
@@ -195,7 +254,7 @@ class MainWindow(QMainWindow):
             ("grp.edit", (self.act_undo, self.act_redo)),
             ("grp.page", (self.act_rot_left, self.act_rot_right, self.act_insert_page, self.act_del_page,
                           self.act_move_up, self.act_move_down, self.act_merge, self.act_extract, self.act_split)),
-            ("grp.view", (self.act_zoom_out, self.act_zoom_in, self.act_zoom_fit)),
+            ("grp.view", (self.act_zoom_out, self.act_zoom_in, self.act_zoom_fit, self.act_split_view)),
         ]
         for i, (key, actions) in enumerate(groups):
             if i:
@@ -214,6 +273,13 @@ class MainWindow(QMainWindow):
         style.addWidget(self._group_label(tr("grp.tools")))
         for a in self.tool_actions.values():
             style.addAction(a)
+        style.addSeparator()
+        self.snap_check = QCheckBox(tr("lbl.snap"))
+        self.snap_check.setToolTip(tr("tip.snap"))
+        self.snap_check.setChecked(self.settings.value("view/snap", True, type=bool))
+        self.snap_check.toggled.connect(self._set_snap)
+        style.addWidget(self.snap_check)
+        self._set_snap(self.snap_check.isChecked())
         style.addSeparator()
         style.addWidget(QLabel(tr("lbl.stroke")))
         self.stroke_btn = ColorButton((0.86, 0.12, 0.12))
@@ -254,6 +320,7 @@ class MainWindow(QMainWindow):
 
     def _set_tool(self, tool: Tool) -> None:
         self.view.set_tool(tool)
+        self.split_pane.view.set_tool(tool)
         self.tool_actions[tool].setChecked(True)
         tip = {Tool.SELECT: "tip.select", Tool.TEXT: "tip.text", Tool.ERASE: "tip.erase"}.get(tool, "tip.shape")
         self.statusBar().showMessage(tr(tip))
@@ -267,10 +334,18 @@ class MainWindow(QMainWindow):
             a.setEnabled(has)
         for a in self.tool_actions.values():
             a.setEnabled(has)
-        self.act_undo.setEnabled(bool(self.pdf and self.pdf.can_undo))
-        self.act_redo.setEnabled(bool(self.pdf and self.pdf.can_redo))
-        self.act_delete_sel.setEnabled(self.view.selected_xref() >= 0)
+        tp = self._tpdf()
+        self.act_undo.setEnabled(bool(tp and tp.can_undo))
+        self.act_redo.setEnabled(bool(tp and tp.can_redo))
+        self.act_delete_sel.setEnabled(self._target_view().selected_xref() >= 0)
+        self.act_close_tab.setEnabled(bool(self.docs))
+        self.act_split_view.setEnabled(bool(self.docs))
+        self._sync_split_pane()
         self.drop_hint.setVisible(not has)
+        self.tabbar.setVisible(bool(self.docs))
+        for i, d in enumerate(self.docs):
+            self.tabbar.setTabText(i, self._tab_title(d))
+            self.tabbar.setTabToolTip(i, d.path or "")
         if has:
             self.status_page.setText(tr("lbl.page_of", self.view.pno + 1, self.pdf.page_count))
             name = Path(self.pdf.path).name if self.pdf.path else "untitled.pdf"
@@ -284,22 +359,122 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         self.drop_hint.setGeometry(self.view.rect())
 
-    def _on_doc_changed(self) -> None:
+    def _set_snap(self, on: bool) -> None:
+        self.view.snap_enabled = on
+        self.split_pane.view.snap_enabled = on
+        self.settings.setValue("view/snap", on)
+
+    def _target_view(self) -> PageView:
+        """The pane that editing, undo/redo, save and delete act on (the one clicked last)."""
+        if self._active_view is self.split_pane.view and self.split_pane.isVisible() and self.split_pane.pdf is not None:
+            return self._active_view
+        return self.view
+
+    def _tpdf(self) -> Optional[PdfDocument]:
+        return self._target_view().pdf
+
+    def _set_active_view(self, view: PageView) -> None:
+        if self._active_view is view:
+            return
+        self._active_view = view
+        self.split_pane.set_active(view is self.split_pane.view)
+        self.act_delete_sel.setEnabled(self._target_view().selected_xref() >= 0)
+        self._update_state()
+
+    def _on_annot_selected(self, xref: int, view: PageView) -> None:
+        if view is self._target_view():
+            self.act_delete_sel.setEnabled(xref >= 0)
+
+    def _toggle_split_view(self, on: bool) -> None:
+        self.split_pane.setVisible(on and bool(self.docs))
+        if not on:
+            self._active_view = self.view
+            self.split_pane.set_active(False)
+            self.split_pane.view.set_document(None)
+            self.split_pane.pdf = None
+        if on:
+            self._sync_split_pane(prefer_other=True)
+            total = max(self.splitter.width() - self.thumbs.width(), 2)
+            self.splitter.setSizes([self.thumbs.width(), total // 2, total // 2])
+            QTimer.singleShot(0, self._refit_panes)
+
+    def _refit_panes(self) -> None:
+        self.view.fit_width()
+        if self.split_pane.pdf is not None:
+            self.split_pane.view.fit_width()
+
+    def _sync_split_pane(self, prefer_other: bool = False) -> None:
+        if not self.act_split_view.isChecked():
+            return
+        if not self.docs:
+            self.split_pane.hide()
+            return
+        self.split_pane.show()
+        others = [d for d in self.docs if d is not self.pdf]
+        prefer = others[0] if (prefer_other and others) else self.pdf
+        self.split_pane.set_documents(self.docs, [self._tab_title(d) for d in self.docs], prefer=prefer)
+
+    @staticmethod
+    def _tab_title(pdf: PdfDocument) -> str:
+        name = Path(pdf.path).name if pdf.path else "untitled.pdf"
+        return f"{'*' if pdf.dirty else ''}{name}"
+
+    def _on_doc_changed(self, pdf: Optional[PdfDocument] = None) -> None:
         """Called by PdfDocument after any mutation (incl. undo/redo)."""
+        if pdf is not None and pdf is not self.pdf:
+            self._update_state()  # background tab: only its title changes
+            self.split_pane.refresh_if(pdf)
+            return
         self.view.refresh()
+        if pdf is not None:
+            self.split_pane.refresh_if(pdf)
         self.thumbs.rebuild(self.view.pno)
         self._update_state()
 
     def _attach(self, pdf: PdfDocument) -> None:
+        """Open ``pdf`` in a new tab and make it the current one."""
+        pdf.add_listener(lambda p=pdf: self._on_doc_changed(p))
+        self.docs.append(pdf)
+        self.tabbar.blockSignals(True)
+        idx = self.tabbar.addTab(self._tab_title(pdf))
+        self.tabbar.setCurrentIndex(idx)
+        self.tabbar.blockSignals(False)
+        self._on_tab_changed(idx)
+
+    def _on_tab_changed(self, index: int) -> None:
+        if self.pdf is not None:  # remember where we were in the tab we leave
+            self.pdf._ui_state = (self.view.pno, self.view.zoom)
+        self.pdf = self.docs[index] if 0 <= index < len(self.docs) else None
+        self.view.set_document(self.pdf)
+        self.thumbs.set_document(self.pdf)
         if self.pdf is not None:
-            self.pdf.close()
-        self.pdf = pdf
-        pdf.add_listener(self._on_doc_changed)
-        self.view.set_document(pdf)
-        self.thumbs.set_document(pdf)
-        self.thumbs.setCurrentRow(0)
-        self.view.fit_width()
+            state = getattr(self.pdf, "_ui_state", None)
+            if state:
+                self.view.pno = min(state[0], self.pdf.page_count - 1)
+                self.view.set_zoom(state[1])
+            else:
+                self.view.fit_width()
+            self.thumbs.setCurrentRow(self.view.pno)
         self._update_state()
+
+    def close_tab(self, index: int) -> None:
+        if not 0 <= index < len(self.docs):
+            return
+        if index != self.tabbar.currentIndex():
+            self.tabbar.setCurrentIndex(index)
+        if not self._confirm_discard():
+            return
+        pdf = self.docs[index]
+        # Detach every view of the document before its file handle goes away.
+        self.view.set_document(None)
+        self.thumbs.set_document(None)
+        self.pdf = None
+        self.docs.pop(index)
+        self.tabbar.blockSignals(True)
+        self.tabbar.removeTab(index)
+        self.tabbar.blockSignals(False)
+        pdf.close()
+        self._on_tab_changed(self.tabbar.currentIndex())
 
     def _require_doc(self) -> bool:
         if self.pdf is None or self.pdf.page_count == 0:
@@ -317,29 +492,33 @@ class MainWindow(QMainWindow):
 
     def dropEvent(self, event: QDropEvent) -> None:
         paths = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
-        if not paths:
-            return
-        self.open_path(paths[0])
-        if len(paths) > 1 and self.pdf is not None:
-            try:
-                pages.merge_files(self.pdf, paths[1:])
-            except Exception as exc:  # noqa: BLE001
-                self._error(exc)
+        if paths:
+            event.acceptProposedAction()
+            self.open_paths(paths)
 
     # ---------------------------------------------------------------- file
     def new_document(self) -> None:
-        if not self._confirm_discard():
-            return
         self._attach(PdfDocument.new())
 
     def open_dialog(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, tr("act.open"), "", tr("filter.open"))
-        if path:
+        paths, _ = QFileDialog.getOpenFileNames(self, tr("act.open"), "", tr("filter.open"))
+        if paths:
+            self.open_paths(paths)
+
+    def open_paths(self, paths: list[str]) -> None:
+        for path in paths:
             self.open_path(path)
 
     def open_path(self, path: str) -> None:
-        if not self._confirm_discard():
-            return
+        # Already open? Just switch to its tab.
+        try:
+            real = os.path.realpath(path)
+            for i, d in enumerate(self.docs):
+                if d.path and os.path.realpath(d.path) == real:
+                    self.tabbar.setCurrentIndex(i)
+                    return
+        except OSError:
+            pass
         try:
             pdf = PdfDocument.open(path)
         except Exception as exc:  # noqa: BLE001
@@ -348,13 +527,16 @@ class MainWindow(QMainWindow):
         self._attach(pdf)
 
     def save(self) -> None:
-        if not self._require_doc():
+        self.save_doc(self._tpdf())
+
+    def save_doc(self, pdf: Optional[PdfDocument]) -> None:
+        if pdf is None:
             return
-        if not self.pdf.path or not self.pdf.path.lower().endswith(".pdf"):
-            self.save_as()
+        if not pdf.path or not pdf.path.lower().endswith(".pdf"):
+            self.save_as_doc(pdf)
             return
         try:
-            res = standards.save_document(self.pdf, self.pdf.path, standards.SaveOptions())
+            res = standards.save_document(pdf, pdf.path, standards.SaveOptions())
         except Exception as exc:  # noqa: BLE001
             self._error(exc)
             return
@@ -362,15 +544,18 @@ class MainWindow(QMainWindow):
         self._update_state()
 
     def save_as(self) -> None:
-        if not self._require_doc():
+        self.save_as_doc(self._tpdf())
+
+    def save_as_doc(self, pdf: Optional[PdfDocument]) -> None:
+        if pdf is None:
             return
-        meta = self.pdf.doc.metadata or {}
-        default = self.pdf.path or os.path.join(os.path.expanduser("~"), "untitled.pdf")
+        meta = pdf.doc.metadata or {}
+        default = pdf.path or os.path.join(os.path.expanduser("~"), "untitled.pdf")
         dlg = SaveAsDialog(default, meta.get("title") or "", meta.get("author") or "", self)
         if dlg.exec() != QDialog.Accepted:
             return
         try:
-            res = standards.save_document(self.pdf, dlg.path, dlg.options())
+            res = standards.save_document(pdf, dlg.path, dlg.options())
         except Exception as exc:  # noqa: BLE001
             self._error(exc)
             return
@@ -393,21 +578,32 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(tr("msg.merge_done", n), 5000)
 
     def _confirm_discard(self) -> bool:
+        """Ask about unsaved changes of the *current* tab."""
         if self.pdf is None or not self.pdf.dirty:
             return True
         ret = QMessageBox.question(self, tr("app.title"), tr("msg.unsaved"),
                                    QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel)
         if ret == QMessageBox.Save:
-            self.save()
+            self.save_doc(self.pdf)
             return not self.pdf.dirty
         return ret == QMessageBox.Discard
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._confirm_discard():
+        ok = True
+        for i in range(len(self.docs) - 1, -1, -1):
+            if self.docs[i].dirty:
+                self.tabbar.setCurrentIndex(i)
+                if not self._confirm_discard():
+                    ok = False
+                    break
+        if ok:
             if self._scan_thread is not None and self._scan_thread.isRunning():
                 self._scan_thread.wait(5000)
             if self.print_server is not None:
                 self.print_server.stop()
+            t = getattr(self, "_update_thread", None)
+            if t is not None and t.isRunning():
+                t.wait(3000)
             event.accept()
         else:
             event.ignore()
@@ -464,65 +660,72 @@ class MainWindow(QMainWindow):
     def _on_print_job(self, path: str) -> None:
         """A converted print job is ready: show it (new window if we have unsaved work)."""
         self.statusBar().showMessage(tr("msg.job_received", path), 8000)
-        if self.pdf is not None and self.pdf.dirty:
-            win = MainWindow(registry=self.registry, scan_fonts=False, settings=self.settings)
-            win.open_path(path)
-            win.show()
-            if not hasattr(self, "_child_windows"):
-                self._child_windows = []
-            self._child_windows.append(win)
-            return
         self.open_path(path)
         self.raise_()
         self.activateWindow()
 
     # ---------------------------------------------------------------- edit
     def undo(self) -> None:
-        if self.pdf and self.pdf.undo():
+        pdf = self._tpdf()
+        if pdf and pdf.undo():
             self._update_state()
 
     def redo(self) -> None:
-        if self.pdf and self.pdf.redo():
+        pdf = self._tpdf()
+        if pdf and pdf.redo():
             self._update_state()
 
     def delete_selected(self) -> None:
-        xref = self.view.selected_xref()
-        if self.pdf and xref >= 0:
-            shapes.delete_annot(self.pdf, self.view.pno, xref)
+        view = self._target_view()
+        xref = view.selected_xref()
+        if view.pdf and xref >= 0:
+            shapes.delete_annot(view.pdf, view.pno, xref)
 
-    def _edit_span(self, span: text_edit.TextSpan) -> None:
+    def _edit_span(self, span: text_edit.TextSpan, view: PageView) -> None:
         match = self.registry.match_pdf_font(span.font, span.flags)
         dlg = TextDialog(self.registry, span.text, match.name, span.font, span.size, span.color, editing=True, parent=self)
         if dlg.exec() != QDialog.Accepted:
             return
         try:
-            text_edit.replace_span(self.pdf, span, dlg.result_text(), dlg.result_font(), dlg.result_size(),
+            text_edit.replace_span(view.pdf, span, dlg.result_text(), dlg.result_font(), dlg.result_size(),
                                    dlg.result_color(), registry=self.registry)
         except Exception as exc:  # noqa: BLE001
             self._error(exc)
 
-    def _new_text(self, point: pymupdf.Point) -> None:
+    def _new_text(self, point: pymupdf.Point, view: PageView) -> None:
         dlg = TextDialog(self.registry, "", self.font_combo.currentText(), None, self.size_spin.value(),
                          self.stroke_btn.color() or (0, 0, 0), editing=False, parent=self)
         if dlg.exec() != QDialog.Accepted or not dlg.result_text().strip():
             return
         try:
-            text_edit.add_text(self.pdf, self.view.pno, point, dlg.result_text(), dlg.result_font(),
+            text_edit.add_text(view.pdf, view.pno, point, dlg.result_text(), dlg.result_font(),
                                dlg.result_size(), dlg.result_color())
         except Exception as exc:  # noqa: BLE001
             self._error(exc)
 
-    def _shape_drawn(self, kind: str, p1: pymupdf.Point, p2: pymupdf.Point) -> None:
+    def _shape_drawn(self, kind: str, p1: pymupdf.Point, p2: pymupdf.Point, view: PageView) -> None:
         try:
-            shapes.add_shape(self.pdf, self.view.pno, kind, p1, p2, self._style())
+            shapes.add_shape(view.pdf, view.pno, kind, p1, p2, self._style())
         except Exception as exc:  # noqa: BLE001
             self._error(exc)
 
-    def _annot_moved(self, xref: int, dx: float, dy: float) -> None:
-        shapes.move_annot(self.pdf, self.view.pno, xref, dx, dy)
+    def _span_moved(self, span: text_edit.TextSpan, dx: float, dy: float, view: PageView) -> None:
+        try:
+            text_edit.move_span(view.pdf, span, dx, dy, registry=self.registry)
+        except Exception as exc:  # noqa: BLE001
+            self._error(exc)
 
-    def _erase_drawing(self, drawing: shapes.Drawing) -> None:
-        shapes.delete_drawing(self.pdf, self.view.pno, drawing.rect)
+    def _drawing_moved(self, drawing: shapes.Drawing, dx: float, dy: float, view: PageView) -> None:
+        try:
+            shapes.move_drawing(view.pdf, view.pno, drawing, dx, dy)
+        except Exception as exc:  # noqa: BLE001
+            self._error(exc)
+
+    def _annot_moved(self, xref: int, dx: float, dy: float, view: PageView) -> None:
+        shapes.move_annot(view.pdf, view.pno, xref, dx, dy)
+
+    def _erase_drawing(self, drawing: shapes.Drawing, view: PageView) -> None:
+        shapes.delete_drawing(view.pdf, view.pno, drawing.rect)
 
     # ---------------------------------------------------------------- pages
     def _goto_page(self, pno: int) -> None:
@@ -624,6 +827,33 @@ class MainWindow(QMainWindow):
         info = self.registry.add_file(path)
         if info is not None:
             self.font_combo.reload(info.name)
+
+    def check_for_updates(self, silent: bool = True) -> None:
+        """Look for a newer release in the background.  ``silent`` (the startup check)
+        stays quiet unless an update exists; it also honours the opt-out and skipped version."""
+        if silent and not self.act_auto_update.isChecked():
+            return
+        if getattr(self, "_update_thread", None) is not None and self._update_thread.isRunning():
+            return
+        self._update_thread = _UpdateThread(self)
+        self._update_thread.found.connect(lambda rel: self._on_update_result(rel, silent))
+        self._update_thread.failed.connect(lambda msg: None if silent else
+                                           QMessageBox.warning(self, tr("act.check_update").replace("&", ""),
+                                                               tr("msg.update_failed", msg)))
+        self._update_thread.start()
+
+    def _on_update_result(self, rel, silent: bool) -> None:
+        if rel is None:
+            if not silent:
+                QMessageBox.information(self, tr("act.check_update").replace("&", ""),
+                                        tr("msg.update_none", __version__))
+            return
+        if silent and self.settings.value("update/skipped", "") == rel.version:
+            return
+        dlg = UpdateDialog(rel, self)
+        dlg.exec()
+        if dlg.skipped:
+            self.settings.setValue("update/skipped", rel.version)
 
     def about(self) -> None:
         import pikepdf

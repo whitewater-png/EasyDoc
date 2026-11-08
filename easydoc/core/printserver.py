@@ -32,7 +32,7 @@ import pymupdf
 from .standards import find_ghostscript
 
 DEFAULT_PORT = 9100
-PRINTER_NAME = "easydoc PDF"
+PRINTER_NAME = "EasyDoc PDF"
 
 
 def inbox_dir() -> Path:

@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("EASYDOC_LANG", "en")
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
-from PySide6.QtCore import QPointF, Qt  # noqa: E402
+from PySide6.QtCore import QPoint, QPointF, Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
 from easydoc.core.document import PdfDocument  # noqa: E402
@@ -166,3 +166,217 @@ def test_toolbar_has_buttons_for_every_feature(window):
               window.act_zoom_fit, *window.tool_actions.values()):
         assert a in actions, a.text()
         assert not a.icon().isNull(), a.text()
+
+
+def _drag(view, app, scene_from, scene_to):
+    vp = view.viewport()
+    a = view.mapFromScene(QPointF(*scene_from))
+    b = view.mapFromScene(QPointF(*scene_to))
+    QTest.mousePress(vp, Qt.LeftButton, Qt.NoModifier, a)
+    QTest.mouseMove(vp, (a + b) / 2)
+    QTest.mouseMove(vp, b)
+    QTest.mouseRelease(vp, Qt.LeftButton, Qt.NoModifier, b)
+    app.processEvents()
+
+
+def test_drag_moves_existing_text(window, app):
+    from easydoc.core import text_edit
+
+    window._set_tool(Tool.SELECT)
+    page = window.pdf.page(0)
+    span = text_edit.get_spans(page)[0]
+    z = window.view.zoom
+    cx, cy = (span.bbox.x0 + span.bbox.x1) / 2 * z, (span.bbox.y0 + span.bbox.y1) / 2 * z
+    _drag(window.view, app, (cx, cy), (cx + 60, cy + 90))
+    moved = [s for s in text_edit.get_spans(window.pdf.page(0)) if s.text == span.text]
+    assert moved and abs(moved[0].bbox.x0 - span.bbox.x0 - 60 / z) < 2 and abs(moved[0].bbox.y0 - span.bbox.y0 - 90 / z) < 2
+
+
+def test_drag_moves_shape_annotation(window, app):
+    window._set_tool(Tool.RECT)
+    _drag(window.view, app, (300, 300), (400, 380))
+    window._set_tool(Tool.SELECT)
+    page = window.pdf.page(0)
+    before = pymupdf.Rect(list(page.annots())[0].rect)
+    _drag(window.view, app, (350, 340), (350 + 40, 340 + 30))
+    page2 = window.pdf.page(0)
+    after = pymupdf.Rect(list(page2.annots())[0].rect)
+    z = window.view.zoom
+    assert abs(after.x0 - before.x0 - 40 / z) < 1 and abs(after.y0 - before.y0 - 30 / z) < 1
+
+
+def test_drag_moves_content_drawing(window, app):
+    from easydoc.core import shapes
+
+    page = window.pdf.page(0)
+    page.draw_rect(pymupdf.Rect(100, 400, 200, 460), color=(1, 0, 0), fill=(0.9, 0.9, 0))
+    window.pdf.mutated()
+    window.pdf.dirty = False
+    app.processEvents()
+    z = window.view.zoom
+    window._set_tool(Tool.SELECT)
+    _drag(window.view, app, (150 * z, 430 * z), (150 * z + 50, 430 * z + 20))
+    rects = [d.rect for d in shapes.list_drawings(window.pdf.page(0)) if d.rect.width < 150 and d.rect.width > 50]
+    assert any(abs(r.x0 - (100 + 50 / z)) < 1.5 and abs(r.y0 - (400 + 20 / z)) < 1.5 for r in rects), rects
+
+
+def test_tabs_multiple_documents(window, app, tmp_path):
+    first = window.pdf
+    window.new_document()
+    assert len(window.docs) == 2 and window.tabbar.count() == 2
+    assert window.pdf is window.docs[1] and window.pdf is not first
+    window.tabbar.setCurrentIndex(0)
+    app.processEvents()
+    assert window.pdf is first and window.thumbs.count() == 3
+    # same file again just re-selects its tab
+    window.tabbar.setCurrentIndex(1)
+    window.open_path(first.path)
+    assert len(window.docs) == 2 and window.pdf is first
+    window.docs[1].dirty = False
+    window.close_tab(1)
+    assert len(window.docs) == 1 and window.tabbar.count() == 1 and window.pdf is first
+
+
+def test_drop_files_opens_tabs(window, app, tmp_path):
+    from PySide6.QtCore import QMimeData, QUrl
+    from PySide6.QtGui import QDropEvent
+
+    other = tmp_path / "other.pdf"
+    d = pymupdf.open()
+    d.new_page()
+    d.save(str(other))
+    md = QMimeData()
+    md.setUrls([QUrl.fromLocalFile(str(other))])
+    from PySide6.QtGui import QDragEnterEvent
+
+    assert window.view.viewport().acceptDrops() and window.acceptDrops()
+    enter = QDragEnterEvent(QPoint(10, 10), Qt.CopyAction, md, Qt.LeftButton, Qt.NoModifier)
+    QtWidgets.QApplication.sendEvent(window.view.viewport(), enter)
+    assert enter.isAccepted()
+    ev = QDropEvent(QPointF(10, 10), Qt.CopyAction, md, Qt.LeftButton, Qt.NoModifier)
+    QtWidgets.QApplication.sendEvent(window.view.viewport(), ev)
+    app.processEvents()
+    assert len(window.docs) == 2 and window.pdf.path == str(other)
+
+
+def test_split_view_shows_two_documents(window, app, tmp_path):
+    other = tmp_path / "second.pdf"
+    d = pymupdf.open()
+    d.new_page().insert_text((72, 72), "SECOND")
+    d.save(str(other))
+    window.open_path(str(other))
+    window.act_split_view.setChecked(True)
+    app.processEvents()
+    pane = window.split_pane
+    assert pane.isVisible() and len(pane._docs) == 2
+    assert pane.pdf is not window.pdf          # compares a different document side by side
+    window.tabbar.setCurrentIndex(0)
+    app.processEvents()
+    assert pane.pdf is not None and window.pdf.path != pane.pdf.path or pane.pdf is window.pdf
+    window.act_split_view.setChecked(False)
+    assert not pane.isVisible()
+    window.close_tab(1)
+    assert len(window.docs) == 1
+
+
+def test_logo_renders(app):
+    from easydoc.ui.logo import draw_logo
+
+    pm = draw_logo(128)
+    assert pm.width() == 128 and not pm.toImage().pixelColor(64, 64).alpha() == 0
+
+
+def test_split_right_pane_is_editable(window, app, tmp_path):
+    from easydoc.core import text_edit
+
+    other = tmp_path / "second.pdf"
+    d = pymupdf.open()
+    d.new_page().insert_text((72, 100), "SECOND", fontsize=20)
+    d.save(str(other))
+    left = window.pdf
+    window.open_path(str(other))
+    window.tabbar.setCurrentIndex(0)
+    window.act_split_view.setChecked(True)
+    app.processEvents()
+    app.processEvents()
+    right = window.split_pane.view
+    assert right.pdf is not None and right.pdf is not left and not right.readonly
+    window._set_tool(Tool.RECT)
+    _drag(right, app, (150, 200), (250, 280))
+    assert len(list(right.pdf.page(0).annots())) == 1       # drawn on the right document
+    assert list(left.page(0).annots()) == []                # left document untouched
+    assert right.pdf.dirty and window._target_view() is right
+    assert window.act_undo.isEnabled()
+    window.undo()                                           # undo targets the right document
+    assert list(right.pdf.page(0).annots()) == []
+    # moving the right pane's text
+    window._set_tool(Tool.SELECT)
+    z = right.zoom
+    span = text_edit.get_spans(right.pdf.page(0))[0]
+    cx, cy = (span.bbox.x0 + span.bbox.x1) / 2 * z, (span.bbox.y0 + span.bbox.y1) / 2 * z
+    _drag(right, app, (cx, cy), (cx + 40, cy + 40))
+    moved = text_edit.get_spans(right.pdf.page(0))[0]
+    assert moved.bbox.y0 > span.bbox.y0 + 10
+    # saving saves the right pane's document
+    right.pdf.dirty = True
+    window.save()
+    assert not right.pdf.dirty
+    left.dirty = False
+    right.pdf.dirty = False
+
+
+def test_move_snaps_to_other_object_edges(window, app):
+    from easydoc.core import text_edit
+
+    page = window.pdf.page(0)
+    spans = text_edit.get_spans(page)
+    ref = spans[0]
+    # a second block of text placed below, with a different left edge
+    page.insert_text((ref.bbox.x0 + 40, 400), "snapme", fontsize=12)
+    window.pdf.mutated()
+    app.processEvents()
+    z = window.view.zoom
+    target = [s for s in text_edit.get_spans(window.pdf.page(0)) if s.text == "snapme"][0]
+    window._set_tool(Tool.SELECT)
+    # drag "snapme" left by ~38pt (2pt short of aligning with the first span's left edge)
+    cx, cy = (target.bbox.x0 + target.bbox.x1) / 2 * z, (target.bbox.y0 + target.bbox.y1) / 2 * z
+    window.snap_check.setChecked(True)
+    _drag(window.view, app, (cx, cy), (cx - 38 * z, cy))
+    moved = [s for s in text_edit.get_spans(window.pdf.page(0)) if s.text == "snapme"][0]
+    assert abs(moved.bbox.x0 - ref.bbox.x0) < 0.6          # snapped onto the other text's left edge
+    assert window.view._guides == []                         # guides are removed after the drop
+    # with snapping off the raw offset is kept
+    window.snap_check.setChecked(False)
+    t2 = moved
+    cx, cy = (t2.bbox.x0 + t2.bbox.x1) / 2 * z, (t2.bbox.y0 + t2.bbox.y1) / 2 * z
+    _drag(window.view, app, (cx, cy), (cx + 30 * z + 3, cy))
+    moved2 = [s for s in text_edit.get_spans(window.pdf.page(0)) if s.text == "snapme"][0]
+    assert abs(moved2.bbox.x0 - (t2.bbox.x0 + 30 + 3 / z)) < 1.2
+
+
+def test_update_dialog_and_menu(window, app, monkeypatch):
+    from easydoc.core import updater
+    from easydoc.ui import main_window as mw
+
+    rel = updater.parse_release({"tag_name": "v9.0.0", "body": "changes", "html_url": "https://x",
+                                 "assets": []})
+    shown = []
+
+    class FakeDlg:
+        skipped = True
+
+        def __init__(self, release, parent=None):
+            shown.append(release.version)
+
+        def exec(self):
+            return 0
+
+    monkeypatch.setattr(mw, "UpdateDialog", FakeDlg)
+    window._on_update_result(rel, silent=True)
+    assert shown == ["9.0.0"] and window.settings.value("update/skipped") == "9.0.0"
+    window._on_update_result(rel, silent=True)           # skipped version stays quiet at start-up
+    assert shown == ["9.0.0"]
+    window._on_update_result(rel, silent=False)          # manual check always shows it
+    assert shown == ["9.0.0", "9.0.0"]
+    window.act_auto_update.setChecked(False)
+    assert window.settings.value("update/auto", True, type=bool) is False

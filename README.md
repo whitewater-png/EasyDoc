@@ -1,4 +1,4 @@
-# easydoc — 軽量クロスプラットフォーム PDF エディタ
+# EasyDoc — 軽量クロスプラットフォーム PDF エディタ
 
 GUI で直感的に操作できる、Python 製の軽量 PDF エディタです。
 Windows / macOS / Linux で同じコードがそのまま動きます。
@@ -22,7 +22,7 @@ Windows / macOS / Linux で同じコードがそのまま動きます。
 | 軽量 | 依存は PyMuPDF・pikepdf・PySide6-Essentials の 3 つのみ。Electron 等のブラウザランタイム不要 |
 | 共通言語 | 100% Python。ネイティブ処理は MuPDF / QPDF / Qt (いずれも 3 OS 対応) |
 | 印刷 | OS の印刷ダイアログから任意のプリンターに出力(ページ範囲・部数指定可)。ページごとに向きを自動調整 |
-| 他アプリからの「印刷→easydoc」 | 「easydoc PDF」という仮想プリンターを OS に登録し、Word/Excel/PowerPoint など任意のアプリの印刷メニューから easydoc に直接 PDF を送れる(後述) |
+| 他アプリからの「印刷→EasyDoc」 | 「EasyDoc PDF」という仮想プリンターを OS に登録し、Word/Excel/PowerPoint など任意のアプリの印刷メニューから EasyDoc に直接 PDF を送れる(後述) |
 
 元に戻す / やり直す (Undo/Redo) は全操作に対応しています(最大 30 段階)。
 
@@ -85,15 +85,15 @@ PDF バージョン設定・sRGB 出力インテント・XMP の規格識別・�
 ツールバーの「印刷」(Ctrl+P / ⌘P) で OS 標準の印刷ダイアログが開きます。ページ範囲・現在のページ・部数を指定でき、
 横長ページは自動で横向きに出力されます。ページは MuPDF で最大 300dpi にラスタライズして送ります。
 
-### 他のアプリから easydoc に「印刷」する(仮想プリンター)
+### 他のアプリから EasyDoc に「印刷」する(仮想プリンター)
 
-Word・Excel・PowerPoint・ブラウザなど、印刷できるアプリなら何でも「easydoc PDF」プリンターを選ぶだけで
-easydoc に PDF が開きます。仕組みは次のとおりです。
+Word・Excel・PowerPoint・ブラウザなど、印刷できるアプリなら何でも「EasyDoc PDF」プリンターを選ぶだけで
+EasyDoc に PDF が開きます。仕組みは次のとおりです。
 
-1. easydoc が `127.0.0.1:9100` (変更可) で RAW 印刷データを待ち受ける(ツールバー「印刷を受け付ける」をオン。状態は記憶されます)。
-2. OS 側に、そのポートへ出力するプリンターキューを **1 回だけ** 作成する(ファイル → 「easydoc PDF」プリンターを設定…)。
+1. EasyDoc が `127.0.0.1:9100` (変更可) で RAW 印刷データを待ち受ける(ツールバー「印刷を受け付ける」をオン。状態は記憶されます)。
+2. OS 側に、そのポートへ出力するプリンターキューを **1 回だけ** 作成する(ファイル → 「EasyDoc PDF」プリンターを設定…)。
    ダイアログの「今すぐプリンターを作成」で管理者権限を求めて自動登録するか、表示されたコマンドを手動で実行します。
-3. 届いたデータ(PDF / XPS / PostScript)を PDF に変換し、`inbox` フォルダに保存して easydoc で開きます。
+3. 届いたデータ(PDF / XPS / PostScript)を PDF に変換し、`inbox` フォルダに保存して EasyDoc で開きます。
    編集中の未保存文書がある場合は新しいウィンドウで開きます。
 
 | OS | 作成されるキュー | 届く形式 | 補足 |
@@ -121,7 +121,7 @@ easydoc に PDF が開きます。仕組みは次のとおりです。
 | ズーム | Ctrl+ホイール、Ctrl+±、Ctrl+0 (幅合わせ)、Ctrl+1 (実寸) |
 | 規格保存 | ファイル → 名前を付けて保存 / 規格書き出し (Ctrl+Shift+S は分割) |
 | 印刷 | Ctrl+P / ⌘P |
-| 他アプリから受信 | ツールバー「印刷を受け付ける」をオン → 他アプリで「easydoc PDF」に印刷 |
+| 他アプリから受信 | ツールバー「印刷を受け付ける」をオン → 他アプリで「EasyDoc PDF」に印刷 |
 | ファイルを開く | ウィンドウに PDF をドラッグ&ドロップ(複数なら 2 つ目以降は結合) |
 
 UI 言語は OS のロケールが日本語なら日本語、それ以外は英語になります。
@@ -174,7 +174,7 @@ MIT。PyMuPDF (AGPL-3.0) / pikepdf (MPL-2.0) / PySide6 (LGPL-3.0) に依存し�
 
 ---
 
-# easydoc — lightweight cross-platform PDF editor (English)
+# EasyDoc — lightweight cross-platform PDF editor (English)
 
 A GUI PDF editor written entirely in Python (PySide6 + PyMuPDF + pikepdf) that runs
 unchanged on Windows, macOS and Linux.
@@ -189,8 +189,8 @@ unchanged on Windows, macOS and Linux.
 * Save as a specific PDF version (1.4–2.0), PDF/A-1b/2b/2u/3b or PDF/X-3 — a real conversion
   when Ghostscript is installed, a clearly-labelled best-effort otherwise — with optional linearization.
 * Print to any printer through the native print dialog.
-* Virtual printer: register an "easydoc PDF" printer queue (TCP/IP port on 127.0.0.1) and print into
-  easydoc from Word, Excel, PowerPoint or any other application; PDF, XPS and PostScript jobs are converted.
+* Virtual printer: register an "EasyDoc PDF" printer queue (TCP/IP port on 127.0.0.1) and print into
+  EasyDoc from Word, Excel, PowerPoint or any other application; PDF, XPS and PostScript jobs are converted.
 * Full undo / redo.
 
 ```bash

@@ -80,3 +80,21 @@ def test_delete_content_drawing(sample_pdf):
     shapes.delete_drawing(pdf, 0, d.rect)
     assert shapes.drawing_at(pdf.page(0), pymupdf.Point(350, 330)) is None
     assert "Hello World" in pdf.page(0).get_text()  # text kept
+
+
+def test_repeated_annot_moves_do_not_distort():
+    import pymupdf
+    from easydoc.core import shapes
+    from easydoc.core.document import PdfDocument
+
+    pdf = PdfDocument.new()
+    xref = shapes.add_shape(pdf, 0, "rect", pymupdf.Point(100, 100), pymupdf.Point(200, 160),
+                            shapes.ShapeStyle(stroke=(1, 0, 0), width=3))
+    page = pdf.page(0)
+    r0 = pymupdf.Rect(list(page.annots())[0].rect)
+    for _ in range(3):
+        assert shapes.move_annot(pdf, 0, xref, 10, 5)
+    page = pdf.page(0)
+    r = pymupdf.Rect(list(page.annots())[0].rect)
+    assert (round(r.x0 - r0.x0, 3), round(r.y0 - r0.y0, 3)) == (30, 15)
+    assert (round(r.width, 3), round(r.height, 3)) == (round(r0.width, 3), round(r0.height, 3))

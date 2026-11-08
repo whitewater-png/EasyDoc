@@ -7,6 +7,7 @@ restricted to line art.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
@@ -104,25 +105,38 @@ def delete_annot(pdf: PdfDocument, pno: int, xref: int) -> bool:
     return False
 
 
+def _shift_numbers(pdf: PdfDocument, xref: int, key: str, dx: float, dy: float) -> None:
+    """Translate a PDF number array such as /Rect or /L (x y x y ...) in place.
+    PDF user space has its y axis pointing up, hence ``-dy``."""
+    kind, value = pdf.doc.xref_get_key(xref, key)
+    if kind != "array":
+        return
+    nums = [float(v) for v in value.strip("[]").split()]
+    for k in range(0, len(nums) - 1, 2):
+        nums[k] += dx
+        nums[k + 1] -= dy
+    pdf.doc.xref_set_key(xref, key, "[" + " ".join(f"{n:.4f}" for n in nums) + "]")
+
+
 def move_annot(pdf: PdfDocument, pno: int, xref: int, dx: float, dy: float) -> bool:
+    """Translate an annotation.  Only the geometry keys are shifted; the existing
+    appearance stream is reused, so repeated moves never distort the shape
+    (regenerating it with ``annot.update()`` grew the rect on every move)."""
     page = pdf.page(pno)
     for annot in page.annots():
         if annot.xref == xref:
             pdf.snapshot()
-            r = annot.rect + (dx, dy, dx, dy)
-            if annot.type[0] == pymupdf.PDF_ANNOT_LINE:
-                verts = annot.vertices or []
-                if len(verts) >= 2:
-                    p1 = pymupdf.Point(verts[0]) + (dx, dy)
-                    p2 = pymupdf.Point(verts[1]) + (dx, dy)
-                    annot.set_rect(pymupdf.Rect(p1, p2).normalize() + (-5, -5, 5, 5))
-                    # Lines are defined by /L, update it directly.
-                    pdf.doc.xref_set_key(xref, "L", f"[{p1.x} {page.rect.height - p1.y} {p2.x} {page.rect.height - p2.y}]")
-                    annot.update()
-                    pdf.mutated()
-                    return True
-            annot.set_rect(r)
-            annot.update()
+            for key in ("Rect", "L"):
+                _shift_numbers(pdf, xref, key, dx, dy)
+            kind, value = pdf.doc.xref_get_key(xref, "InkList")
+            if kind == "array" and "[" in value:
+                nested = re.findall(r"\[([^\[\]]*)\]", value)
+                lists = []
+                for chunk in nested:
+                    nums = [float(v) for v in chunk.split()]
+                    nums = [n + dx if k % 2 == 0 else n - dy for k, n in enumerate(nums)]
+                    lists.append("[" + " ".join(f"{n:.4f}" for n in nums) + "]")
+                pdf.doc.xref_set_key(xref, "InkList", "[" + " ".join(lists) + "]")
             pdf.mutated()
             return True
     return False
@@ -132,6 +146,7 @@ def move_annot(pdf: PdfDocument, pno: int, xref: int, dx: float, dy: float) -> b
 class Drawing:
     rect: pymupdf.Rect
     kind: str  # "f" fill, "s" stroke, "fs" both
+    data: Optional[dict] = None  # raw ``page.get_drawings()`` entry (used to redraw when moving)
 
 
 def list_drawings(page: pymupdf.Page) -> list[Drawing]:
@@ -143,14 +158,21 @@ def list_drawings(page: pymupdf.Page) -> list[Drawing]:
         r = pymupdf.Rect(r)
         if r.is_empty or r.is_infinite:
             continue
-        out.append(Drawing(rect=r, kind=d.get("type", "s")))
+        out.append(Drawing(rect=r, kind=d.get("type", "s"), data=d))
     return out
 
 
-def drawing_at(page: pymupdf.Page, point: pymupdf.Point, tolerance: float = 2.0) -> Optional[Drawing]:
-    """Return the smallest content-stream drawing whose bbox contains ``point``."""
+def drawing_at(page: pymupdf.Page, point: pymupdf.Point, tolerance: float = 2.0,
+               skip_background: bool = False) -> Optional[Drawing]:
+    """Return the smallest content-stream drawing whose bbox contains ``point``.
+
+    With ``skip_background`` drawings covering most of the page are ignored so that
+    dragging on empty paper never grabs a page-sized background rectangle."""
     best = None
+    page_area = page.rect.get_area()
     for d in list_drawings(page):
+        if skip_background and d.rect.get_area() > 0.6 * page_area:
+            continue
         r = pymupdf.Rect(d.rect) + (-tolerance, -tolerance, tolerance, tolerance)
         if r.contains(point):
             if best is None or r.get_area() < best.rect.get_area():
@@ -169,3 +191,46 @@ def delete_drawing(pdf: PdfDocument, pno: int, rect: pymupdf.Rect) -> None:
                           graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
                           text=pymupdf.PDF_REDACT_TEXT_NONE)
     pdf.mutated()
+
+
+def move_drawing(pdf: PdfDocument, pno: int, drawing: Drawing, dx: float, dy: float) -> bool:
+    """Move a content-stream vector drawing by removing it and redrawing it offset."""
+    d = drawing.data
+    if not d or not d.get("items"):
+        return False
+    page = pdf.page(pno)
+    pdf.snapshot()
+    m = 2.0
+    page.add_redact_annot(pymupdf.Rect(drawing.rect) + (-m, -m, m, m))
+    page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
+                          graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
+                          text=pymupdf.PDF_REDACT_TEXT_NONE)
+    shape = page.new_shape()
+    off = pymupdf.Point(dx, dy)
+    for item in d["items"]:
+        op = item[0]
+        if op == "l":
+            shape.draw_line(pymupdf.Point(item[1]) + off, pymupdf.Point(item[2]) + off)
+        elif op == "c":
+            shape.draw_bezier(pymupdf.Point(item[1]) + off, pymupdf.Point(item[2]) + off,
+                              pymupdf.Point(item[3]) + off, pymupdf.Point(item[4]) + off)
+        elif op == "re":
+            shape.draw_rect(pymupdf.Rect(item[1]) + (dx, dy, dx, dy))
+        elif op == "qu":
+            shape.draw_quad(pymupdf.Quad(*[pymupdf.Point(p) + off for p in item[1]]))
+    kind = d.get("type", "s")
+    shape.finish(
+        fill=d.get("fill") if "f" in kind else None,
+        color=d.get("color") if "s" in kind else None,
+        width=d.get("width") or 1.0,
+        closePath=bool(d.get("closePath", False)),
+        even_odd=bool(d.get("even_odd", False)),
+        fill_opacity=d.get("fill_opacity") if d.get("fill_opacity") is not None else 1,
+        stroke_opacity=d.get("stroke_opacity") if d.get("stroke_opacity") is not None else 1,
+        dashes=d.get("dashes") or None,
+        lineCap=(d.get("lineCap") or [0])[0] if isinstance(d.get("lineCap"), (list, tuple)) else (d.get("lineCap") or 0),
+        lineJoin=d.get("lineJoin") or 0,
+    )
+    shape.commit()
+    pdf.mutated()
+    return True

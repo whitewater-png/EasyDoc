@@ -15,6 +15,7 @@ THUMB_WIDTH = 110
 class ThumbnailList(QListWidget):
     page_activated = Signal(int)
     reorder_requested = Signal(list)  # new order (list of old indices)
+    files_dropped = Signal(list)      # local files dragged in from the OS
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -97,3 +98,28 @@ class ThumbnailList(QListWidget):
         if not rows and self.currentRow() >= 0:
             rows = [self.currentRow()]
         return rows
+
+    @staticmethod
+    def _local_files(event) -> list[str]:
+        md = event.mimeData()
+        return [u.toLocalFile() for u in md.urls() if u.isLocalFile()] if md.hasUrls() else []
+
+    def dragEnterEvent(self, event) -> None:
+        if self._local_files(event):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event) -> None:
+        if self._local_files(event):
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event) -> None:
+        files = self._local_files(event)
+        if files:
+            event.acceptProposedAction()
+            self.files_dropped.emit(files)
+        else:
+            super().dropEvent(event)

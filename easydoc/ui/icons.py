@@ -184,6 +184,16 @@ def icon(name: str) -> QIcon:
         p.setBrush(QColor("#eef3ff"))
         p.setPen(_pen(ACCENT, 4))
         p.drawRect(QRectF(30, 24, 26, 34))
+    elif n == "split_view":
+        p.setPen(_pen(INK, 4))
+        p.setBrush(QColor("#ffffff"))
+        p.drawRoundedRect(QRectF(6, 10, 22, 44), 3, 3)
+        p.setBrush(QColor("#dbe6ff"))
+        p.drawRoundedRect(QRectF(36, 10, 22, 44), 3, 3)
+        p.setPen(_pen(ACCENT, 3))
+        for y in (22, 32, 42):
+            p.drawLine(11, y, 23, y)
+            p.drawLine(41, y, 53, y)
     elif n == "split":
         p.setPen(_pen(INK, 4))
         p.setBrush(QColor("#ffffff"))

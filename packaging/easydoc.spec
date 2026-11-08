@@ -95,8 +95,8 @@ if IS_MAC:
         icon=icon,
         bundle_identifier="io.github.whitewater-png.easydoc",
         info_plist={
-            "CFBundleName": "easydoc",
-            "CFBundleDisplayName": "easydoc",
+            "CFBundleName": "EasyDoc",
+            "CFBundleDisplayName": "EasyDoc",
             "CFBundleShortVersionString": "0.1.0",
             "NSHighResolutionCapable": True,
             "NSPrincipalClass": "NSApplication",

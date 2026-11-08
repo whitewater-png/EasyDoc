@@ -9,7 +9,7 @@ description = "Lightweight cross-platform GUI PDF editor (text, shapes, pages, P
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "easydoc contributors" }]
+authors = [{ name = "EasyDoc contributors" }]
 dependencies = [
     "PyMuPDF>=1.24",
     "pikepdf>=8.0",

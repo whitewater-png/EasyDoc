@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Optional
 
 import pymupdf
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QLineF, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QImage, QMouseEvent, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsPixmapItem,
                                QGraphicsRectItem, QGraphicsScene, QGraphicsView)
@@ -24,6 +24,10 @@ class Tool(Enum):
     ERASE = "erase"
 
 
+SNAP_PX = 7  # snap distance in screen pixels
+GUIDE_COLOR = QColor(255, 0, 140)
+
+
 class PageView(QGraphicsView):
     span_clicked = Signal(object)            # TextSpan
     text_point_clicked = Signal(object)      # pymupdf.Point
@@ -31,6 +35,10 @@ class PageView(QGraphicsView):
     annot_selected = Signal(int)             # xref or -1
     annot_moved = Signal(int, float, float)  # xref, dx, dy
     drawing_clicked = Signal(object)         # shapes.Drawing
+    span_moved = Signal(object, float, float)     # TextSpan, dx, dy (page units)
+    drawing_moved = Signal(object, float, float)  # shapes.Drawing, dx, dy
+    files_dropped = Signal(list)             # local file paths
+    pressed = Signal()                       # any mouse press (marks this pane active)
     zoom_changed = Signal(float)
 
     def __init__(self, parent=None):
@@ -57,6 +65,16 @@ class PageView(QGraphicsView):
         self._sel_xref = -1
         self._sel_rect: Optional[pymupdf.Rect] = None
         self._moving = False
+        self.snap_enabled = True
+        self._snap_cache: Optional[tuple[list[float], list[float]]] = None
+        self._guides: list = []
+        self._move_delta = QPointF(0, 0)
+        self._grab_delta = QPointF(0, 0)
+        self.readonly = False  # reference pane: no editing interactions
+        self._grab = None  # ("span", TextSpan) | ("drawing", Drawing) pressed in SELECT mode
+        self._grab_dragging = False
+        self.setAcceptDrops(True)
+        self.viewport().setAcceptDrops(True)
         # Keep a strong reference to the current Page: PyMuPDF annotations are
         # unbound as soon as their Page object is garbage collected.
         self._cur_page: Optional[pymupdf.Page] = None
@@ -103,6 +121,10 @@ class PageView(QGraphicsView):
     def refresh(self) -> None:
         self._scene.clear()
         self._pix_item = self._hover_item = self._sel_item = self._rubber = None
+        self._guides = []
+        self._snap_cache = None
+        self._grab = None
+        self._grab_dragging = False
         self._spans = None
         self._cur_page = None
         if self.pdf is None or self.pdf.page_count == 0:
@@ -167,6 +189,65 @@ class PageView(QGraphicsView):
         self._draw_selection()
         self.annot_selected.emit(xref)
 
+    # ------------------------------------------------------------ snapping
+    def _clear_guides(self) -> None:
+        for g in self._guides:
+            if g.scene() is not None:
+                self._scene.removeItem(g)
+        self._guides = []
+
+    def _snap_targets(self, base: QRectF) -> tuple[list[float], list[float]]:
+        """Scene x / y coordinates of the edges of every other text span, drawing and
+        annotation on the page (the moved object itself is left out)."""
+        if self._snap_cache is not None:
+            return self._snap_cache
+        rects: list[QRectF] = [self.to_scene(sp.bbox) for sp in self._spans_cached()]
+        rects += [self.to_scene(d.rect) for d in shapes.list_drawings(self._page())
+                  if d.rect.get_area() <= 0.6 * self._page().rect.get_area()]
+        rects += [self.to_scene(pymupdf.Rect(a.rect)) for a in self._page().annots()]
+        xs: list[float] = []
+        ys: list[float] = []
+        for r in rects:
+            if (abs(r.left() - base.left()) < 0.5 and abs(r.right() - base.right()) < 0.5
+                    and abs(r.top() - base.top()) < 0.5 and abs(r.bottom() - base.bottom()) < 0.5):
+                continue
+            xs += [r.left(), r.right()]
+            ys += [r.top(), r.bottom()]
+        self._snap_cache = (xs, ys)
+        return self._snap_cache
+
+    def _snap_delta(self, base: QRectF, raw: QPointF) -> QPointF:
+        """Adjust the drag offset ``raw`` so that an edge of ``base`` lands on a nearby edge
+        of another object, and draw the guide lines for it."""
+        self._clear_guides()
+        if not self.snap_enabled:
+            return raw
+        xs, ys = self._snap_targets(base)
+        thr = SNAP_PX
+
+        def best(moving: list[float], targets: list[float]):
+            found = None
+            for m in moving:
+                for t in targets:
+                    d = t - m
+                    if abs(d) <= thr and (found is None or abs(d) < abs(found[0])):
+                        found = (d, t)
+            return found
+
+        bx = best([base.left() + raw.x(), base.right() + raw.x()], xs)
+        by = best([base.top() + raw.y(), base.bottom() + raw.y()], ys)
+        out = QPointF(raw.x() + (bx[0] if bx else 0), raw.y() + (by[0] if by else 0))
+        rect = self.sceneRect()
+        pen = QPen(GUIDE_COLOR, 1, Qt.DashLine)
+        pen.setCosmetic(True)
+        if bx:
+            self._guides.append(self._scene.addLine(QLineF(bx[1], rect.top(), bx[1], rect.bottom()), pen))
+        if by:
+            self._guides.append(self._scene.addLine(QLineF(rect.left(), by[1], rect.right(), by[1]), pen))
+        for g in self._guides:
+            g.setZValue(1000)
+        return out
+
     # ---------------------------------------------------------------- events
     def wheelEvent(self, event: QWheelEvent) -> None:
         if event.modifiers() & Qt.ControlModifier:
@@ -177,11 +258,15 @@ class PageView(QGraphicsView):
         super().wheelEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        if self.pdf is None or self.pdf.page_count == 0 or event.button() != Qt.LeftButton:
+        self.pressed.emit()
+        if self.readonly or self.pdf is None or self.pdf.page_count == 0 or event.button() != Qt.LeftButton:
             return super().mousePressEvent(event)
         scene_pt = self.mapToScene(event.position().toPoint())
         page_pt = self.to_page(scene_pt)
         self._drag_start = scene_pt
+        self._snap_cache = None
+        self._move_delta = QPointF(0, 0)
+        self._grab_delta = QPointF(0, 0)
 
         if self.tool is Tool.SELECT:
             annot = shapes.annot_at(self._page(), page_pt)
@@ -192,7 +277,11 @@ class PageView(QGraphicsView):
             self._select_annot(-1)
             span = text_edit.span_at(self._page(), page_pt)
             if span is not None:
-                self.span_clicked.emit(span)
+                self._grab = ("span", span)
+                return
+            d = shapes.drawing_at(self._page(), page_pt, skip_background=True)
+            if d is not None:
+                self._grab = ("drawing", d)
             return
         if self.tool is Tool.TEXT:
             self.text_point_clicked.emit(page_pt)
@@ -214,7 +303,7 @@ class PageView(QGraphicsView):
         self._scene.addItem(self._rubber)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if self.pdf is None or self.pdf.page_count == 0:
+        if self.readonly or self.pdf is None or self.pdf.page_count == 0:
             return super().mouseMoveEvent(event)
         scene_pt = self.mapToScene(event.position().toPoint())
         if self._rubber is not None and self._drag_start is not None:
@@ -223,9 +312,22 @@ class PageView(QGraphicsView):
             else:
                 self._rubber.setRect(QRectF(self._drag_start, scene_pt).normalized())
             return
+        if self._grab is not None and self._drag_start is not None:
+            if (scene_pt - self._drag_start).manhattanLength() >= 4:
+                self._grab_dragging = True
+            if self._grab_dragging:
+                self._clear_hover()
+                rect = self._grab[1].bbox if self._grab[0] == "span" else self._grab[1].rect
+                self._show_hover(rect, QColor(0, 120, 255))
+                base = self.to_scene(rect)
+                self._grab_delta = self._snap_delta(base, scene_pt - self._drag_start)
+                self._hover_item.setRect(base.translated(self._grab_delta))
+                self.setCursor(Qt.ClosedHandCursor)
+            return
         if self._moving and self._drag_start is not None and self._sel_item is not None:
-            delta = scene_pt - self._drag_start
             base = self.to_scene(self._sel_rect)
+            delta = self._snap_delta(base, scene_pt - self._drag_start)
+            self._move_delta = delta
             self._sel_item.setRect(base.translated(delta))
             return
         # hover feedback
@@ -238,6 +340,10 @@ class PageView(QGraphicsView):
             span = text_edit.span_at(self._page(), page_pt)
             if span is not None:
                 self._show_hover(span.bbox, QColor(255, 140, 0))
+                return
+            d = shapes.drawing_at(self._page(), page_pt, skip_background=True)
+            if d is not None:
+                self._show_hover(d.rect, QColor(0, 160, 120))
                 return
             self._clear_hover()
         elif self.tool is Tool.ERASE:
@@ -260,12 +366,29 @@ class PageView(QGraphicsView):
             if (scene_pt - start).manhattanLength() >= 3:
                 self.shape_drawn.emit(self.tool.value, self.to_page(start), self.to_page(scene_pt))
             return
+        if self._grab is not None:
+            kind, obj = self._grab
+            dragging = self._grab_dragging
+            self._grab = None
+            self._grab_dragging = False
+            self._clear_hover()
+            self.setCursor(Qt.ArrowCursor)
+            self._clear_guides()
+            if dragging:
+                p0, p1 = self.to_page(start), self.to_page(start + self._grab_delta)
+                dx, dy = p1.x - p0.x, p1.y - p0.y
+                if abs(dx) + abs(dy) > 0.5:
+                    (self.span_moved if kind == "span" else self.drawing_moved).emit(obj, dx, dy)
+            elif kind == "span":
+                self.span_clicked.emit(obj)
+            return
         if self._moving:
             self._moving = False
+            self._clear_guides()
             delta_scene = scene_pt - start
             if delta_scene.manhattanLength() >= 2 and self._sel_xref >= 0:
                 p0 = self.to_page(start)
-                p1 = self.to_page(scene_pt)
+                p1 = self.to_page(start + self._move_delta)
                 self.annot_moved.emit(self._sel_xref, p1.x - p0.x, p1.y - p0.y)
             return
         super().mouseReleaseEvent(event)
@@ -273,3 +396,29 @@ class PageView(QGraphicsView):
     def leaveEvent(self, event) -> None:
         self._clear_hover()
         super().leaveEvent(event)
+
+    # ------------------------------------------------------------ file drops
+    @staticmethod
+    def _local_files(event) -> list[str]:
+        md = event.mimeData()
+        return [u.toLocalFile() for u in md.urls() if u.isLocalFile()] if md.hasUrls() else []
+
+    def dragEnterEvent(self, event) -> None:
+        if self._local_files(event):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event) -> None:
+        if self._local_files(event):
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event) -> None:
+        files = self._local_files(event)
+        if files:
+            event.acceptProposedAction()
+            self.files_dropped.emit(files)
+        else:
+            super().dropEvent(event)

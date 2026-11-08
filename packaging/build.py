@@ -47,7 +47,7 @@ def main() -> int:
         if out.exists():
             out.unlink()
         if shutil.which("hdiutil"):
-            run(["hdiutil", "create", "-volname", "easydoc", "-srcfolder", str(app), "-ov", "-format", "UDZO", str(out)])
+            run(["hdiutil", "create", "-volname", "EasyDoc", "-srcfolder", str(app), "-ov", "-format", "UDZO", str(out)])
         else:  # pragma: no cover
             out = RELEASE / f"{stem}.zip"
             run(["ditto", "-c", "-k", "--keepParent", str(app), str(out)])
