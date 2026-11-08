@@ -474,3 +474,17 @@ def test_delete_key_removes_whole_selection(window, app):
     window.delete_selected()
     left = [s.text for s in text_edit.get_spans(window.pdf.page(0))]
     assert "alpha" not in left and "bravo" not in left and "charlie" in left
+
+
+def test_text_dialog_keeps_original_font_by_default(app):
+    from easydoc.core.fonts import FontRegistry
+    from easydoc.ui.dialogs import TextDialog
+
+    reg = FontRegistry(scan=False, use_cache=False)
+    dlg = TextDialog(reg, "abc", "Helvetica", "IPAPGothic", 12, (0, 0, 0), editing=True)
+    assert dlg.keep_chk.isChecked() and not dlg.font_combo.isEnabled()
+    assert dlg.result_font() is None                     # None = keep the original font
+    dlg.keep_chk.setChecked(False)
+    assert dlg.font_combo.isEnabled() and dlg.result_font().name == "Helvetica"
+    new = TextDialog(reg, "", "Helvetica", None, 12, (0, 0, 0), editing=False)
+    assert new.keep_chk is None and new.result_font().name == "Helvetica"

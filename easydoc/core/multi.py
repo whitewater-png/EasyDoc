@@ -8,7 +8,8 @@ import pymupdf
 from . import shapes
 from .document import PdfDocument
 from .fonts import FontInfo, FontRegistry, default_registry
-from .text_edit import TextSpan, redact_box, write_text
+from .embedded_fonts import PageFontIndex
+from .text_edit import TextSpan, redact_box, write_span_text
 
 
 def _remove_spans(page: pymupdf.Page, spans: Sequence[TextSpan]) -> None:
@@ -30,13 +31,14 @@ def move_items(pdf: PdfDocument, pno: int, spans: Sequence[TextSpan], drawings: 
     registry = registry or default_registry()
     page = pdf.page(pno)
     with pdf.batch():
-        fonts = [registry.match_pdf_font(s.font, s.flags) for s in spans]
+        index = PageFontIndex(page) if spans else None   # before the redaction
         _remove_spans(page, spans)
         movable = [d for d in drawings if d.data and d.data.get("items")]
         for d in movable:
             shapes.remove_drawing(page, d.rect)
-        for s, f in zip(spans, fonts):
-            write_text(page, pymupdf.Point(s.origin.x + dx, s.origin.y + dy), s.text, f, s.size, s.color)
+        for s in spans:
+            write_span_text(page, index, pymupdf.Point(s.origin.x + dx, s.origin.y + dy), s.text, s,
+                            s.size, s.color, registry=registry)
         for d in movable:
             shapes.redraw_drawing(page, d, dx, dy)
         for xref in annot_xrefs:
@@ -59,11 +61,12 @@ def edit_spans(pdf: PdfDocument, spans: Sequence[TextSpan], find: str = "", repl
         for s in spans:
             text = s.text.replace(find, replace) if find else s.text
             plan.append((s, text))
+        index = PageFontIndex(page) if font is None else None   # before the redaction
         _remove_spans(page, [s for s, _ in plan])
         for s, text in plan:
             if text.strip():
-                f = font or registry.match_pdf_font(s.font, s.flags)
-                write_text(page, s.origin, text, f, size or s.size, color if color is not None else s.color)
+                write_span_text(page, index, s.origin, text, s, size or s.size,
+                                color if color is not None else s.color, font, registry)
         pdf.mutated()
     return len(plan)
 

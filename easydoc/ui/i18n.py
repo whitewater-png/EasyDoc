@@ -95,6 +95,8 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "dlg.color": ("Color", "色"),
     "dlg.delete_text": ("Delete this text", "このテキストを削除"),
     "dlg.original_font": ("Original font: {0}", "元のフォント: {0}"),
+    "dlg.keep_font": ("Keep the original font (closest installed font for missing characters)",
+                      "元のフォントを維持（無い文字があるときは近いフォント）"),
     "dlg.saveas": ("Save As / Export", "名前を付けて保存 / 規格書き出し"),
     "dlg.standard": ("Standard", "規格"),
     "dlg.version": ("PDF version", "PDFバージョン"),

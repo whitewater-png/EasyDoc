@@ -92,17 +92,50 @@ def _cache_file() -> Path:
 
 
 def _normalize(name: str) -> str:
-    name = re.sub(r"^[A-Z]{6}\+", "", name)  # strip subset prefix ABCDEF+
+    name = re.sub(r"^[A-Za-z0-9]{6}\+", "", name)  # strip subset prefix ABCDEF+
     name = name.replace("-", " ").replace("_", " ").replace(",", " ")
     name = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name)  # CamelCase -> words
     return re.sub(r"\s+", " ", name).strip().lower()
 
 
-_CJK_MARKERS = ("gothic", "mincho", "ipa", "hiragino", "meiryo", "yugo", "yumin", "kozuka", "kozgo",
+_CJK_MARKERS = ("kakugo", "marugo", "yugothic", "mincho", "ipa", "hiragino", "meiryo", "yugo", "yumin", "kozuka", "kozgo",
                 "kozmin", "msgothic", "mspgothic", "msmincho", "notosanscjk", "notoserifcjk", "sansjp",
                 "serifjp", "sourcehan", "cjk", "simsun", "simhei", "songti", "heiti", "pingfang",
                 "malgun", "batang", "gulim", "microsoftyahei", "mingliu", "kaiti", "fangsong", "takao",
-                "vlgothic", "ricoh", "morisawa", "hgp", "hgs", "hgm", "idgothic", "tsukushi", "osaka")
+                "vlgothic", "ricoh", "morisawa", "hgp", "hgs", "hgm", "idgothic", "tsukushi", "osaka",
+                "gothicbbb", "heisei", "midashi", "futogo", "futomin", "shingo", "ryumin", "jun101",
+                "jun201", "jun501", "maruga", "gothicmb101", "a1gothic", "a1mincho", "ud shin", "udshin")
+
+
+_CJK_SERIF_MARKERS = ("mincho", "kozmin", "yumin", "ryumin", "hgmin", "hgpmin", "heiseimin", "futomin",
+                      "midashimin", "a1mincho", "serif", "song", "ming", "batang", "kaiti", "fangsong", "明朝")
+
+# Closest installed substitutes, most preferred first (macOS, Windows, Linux).
+_CJK_SUBSTITUTES: dict[tuple[bool, bool], list[str]] = {
+    (False, False): ["Hiragino Sans W3", "Hiragino Kaku Gothic ProN W3", "Hiragino Kaku Gothic Pro W3",
+                     "Yu Gothic Regular", "Yu Gothic Medium", "Yu Gothic", "Meiryo", "Meiryo Regular",
+                     "MS PGothic", "MS Gothic", "Noto Sans CJK JP Regular", "Noto Sans CJK JP",
+                     "Noto Sans JP Regular", "Source Han Sans JP Regular", "IPAexGothic", "IPAPGothic",
+                     "IPAGothic", "TakaoPGothic", "VL PGothic"],
+    (False, True): ["Hiragino Sans W6", "Hiragino Kaku Gothic ProN W6", "Yu Gothic Bold", "Meiryo Bold",
+                    "Noto Sans CJK JP Bold", "Noto Sans JP Bold", "Source Han Sans JP Bold"],
+    (True, False): ["Hiragino Mincho ProN W3", "Hiragino Mincho Pro W3", "Yu Mincho Regular", "Yu Mincho",
+                    "MS PMincho", "MS Mincho", "Noto Serif CJK JP Regular", "Noto Serif CJK JP",
+                    "Noto Serif JP Regular", "Source Han Serif JP Regular", "IPAexMincho", "IPAPMincho",
+                    "IPAMincho", "TakaoPMincho"],
+    (True, True): ["Hiragino Mincho ProN W6", "Yu Mincho Demibold", "Noto Serif CJK JP Bold",
+                   "Noto Serif JP Bold", "Source Han Serif JP Bold"],
+}
+
+
+def _compact(normalized: str) -> str:
+    """'ipap gothic regular' -> 'ipapgothic' (spaces and a trailing 'regular' dropped)."""
+    out = normalized.replace(" ", "")
+    for suffix in ("psmt", "mt", "ps"):          # 'Arial-BoldMT', 'TimesNewRomanPSMT'
+        if out.endswith(suffix) and len(out) > len(suffix) + 3:
+            out = out[: -len(suffix)]
+            break
+    return out[:-7] if out.endswith("regular") and len(out) > 7 else out
 
 
 def _is_cjk_font(lowered: str) -> bool:
@@ -215,6 +248,15 @@ class FontRegistry:
             self._fonts[info.name] = info
         return info
 
+    def _first_installed(self, names: list[str]) -> Optional[FontInfo]:
+        with self._lock:
+            by_key = {_compact(_normalize(f.name)): f for f in self._fonts.values()}
+        for n in names:
+            f = by_key.get(_compact(_normalize(n)))
+            if f is not None:
+                return f
+        return None
+
     def match_pdf_font(self, pdf_fontname: str, flags: int = 0) -> FontInfo:
         """Best effort mapping of a font name found in a PDF to an available font.
 
@@ -227,31 +269,37 @@ class FontRegistry:
         bold = bool(flags & 16)
         target = _normalize(pdf_fontname)
         lowered = target.replace(" ", "")
-        # Fonts easydoc itself writes with (and what MuPDF reports for the Base-14
-        # substitutes) must map back to the very same font; otherwise every move
-        # changes the typeface (MuPDF also flags NimbusSans as "serif").
-        if "droid sans fallback" in target or _is_cjk_font(lowered):
-            return self._fonts["CJK Fallback (Droid Sans Fallback)"]
-        base = _base14_family(lowered)
-        if base:
-            bold = bold or "bold" in lowered
-            italic = italic or "italic" in lowered or "oblique" in lowered
-            key = {(False, False): base, (True, False): base + " Bold",
-                   (False, True): base + " Italic", (True, True): base + " Bold Italic"}
-            if base == "Times":
-                key = {(False, False): "Times Roman", (True, False): "Times Bold",
-                       (False, True): "Times Italic", (True, True): "Times Bold Italic"}
-            return self._fonts[key[(bold, italic)]]
-        if "bold" in lowered:
+        if "bold" in lowered or re.search(r"(^|\s)w[6-9]($|\s)|heavy|black|demi|semibold", target):
             bold = True
         if "italic" in lowered or "oblique" in lowered:
             italic = True
         with self._lock:
             candidates = list(self._fonts.values())
-        # 1) exact normalized name match
+        # 1) the very same font is installed (or is a built-in)
+        key = _compact(target)
         for f in candidates:
-            if _normalize(f.name) == target:
+            if _compact(_normalize(f.name)) == key:
                 return f
+        # 2) fonts easydoc itself writes with must map back to the very same font,
+        #    otherwise every move changes the typeface
+        if "droid sans fallback" in target:
+            return self._fonts["CJK Fallback (Droid Sans Fallback)"]
+        # 3) Japanese/Chinese/Korean font that is not installed: closest installed
+        #    font of the same style (gothic / mincho), then the bundled CJK fallback
+        if _is_cjk_font(lowered):
+            mincho = any(m in lowered for m in _CJK_SERIF_MARKERS)
+            sub = self._first_installed(_CJK_SUBSTITUTES[(mincho, bold)]
+                                        + (_CJK_SUBSTITUTES[(mincho, False)] if bold else []))
+            return sub or self._fonts["CJK Fallback (Droid Sans Fallback)"]
+        # 4) Base-14 look-alikes (MuPDF also flags NimbusSans as "serif")
+        base = _base14_family(lowered)
+        if base:
+            names = {(False, False): base, (True, False): base + " Bold",
+                     (False, True): base + " Italic", (True, True): base + " Bold Italic"}
+            if base == "Times":
+                names = {(False, False): "Times Roman", (True, False): "Times Bold",
+                         (False, True): "Times Italic", (True, True): "Times Bold Italic"}
+            return self._fonts[names[(bold, italic)]]
         # 2) same family (first word) and matching style flags
         family = target.split(" ")[0] if target else ""
         best: Optional[FontInfo] = None

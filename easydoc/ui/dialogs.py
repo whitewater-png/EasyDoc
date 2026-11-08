@@ -104,8 +104,14 @@ class TextDialog(QDialog):
         self.font_combo = FontCombo(registry)
         if font_name:
             self.font_combo.reload(font_name)
+        self.keep_chk: Optional[QCheckBox] = None
         if original_font:
             form.addRow(QLabel(tr("dlg.original_font", original_font)))
+            self.keep_chk = QCheckBox(tr("dlg.keep_font"))
+            self.keep_chk.setChecked(True)
+            self.keep_chk.toggled.connect(lambda on: self.font_combo.setEnabled(not on))
+            self.font_combo.setEnabled(False)
+            form.addRow(self.keep_chk)
         form.addRow(tr("lbl.font"), self.font_combo)
         self.size_spin = QDoubleSpinBox()
         self.size_spin.setRange(1, 400)
@@ -131,7 +137,10 @@ class TextDialog(QDialog):
     def result_text(self) -> str:
         return "" if self.delete_requested else self.edit.toPlainText()
 
-    def result_font(self) -> FontInfo:
+    def result_font(self) -> Optional[FontInfo]:
+        """None = keep the original font of the edited text."""
+        if self.keep_chk is not None and self.keep_chk.isChecked():
+            return None
         return self.font_combo.font_info()
 
     def result_size(self) -> float:
