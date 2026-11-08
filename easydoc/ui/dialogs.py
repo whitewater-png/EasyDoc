@@ -141,6 +141,75 @@ class TextDialog(QDialog):
         return self.color_btn.color() or (0, 0, 0)
 
 
+class BulkTextDialog(QDialog):
+    """Change font / size / colour (and optionally find & replace the wording) of several
+    selected text spans at once.  Anything left unticked keeps each span's own value."""
+
+    def __init__(self, registry: FontRegistry, count: int, size: float = 12.0, color=(0, 0, 0),
+                 font_name: Optional[str] = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("dlg.bulk_text"))
+        lay = QVBoxLayout(self)
+        lay.addWidget(QLabel(tr("dlg.bulk_count", count)))
+        form = QFormLayout()
+        self.find_edit = QLineEdit()
+        self.replace_edit = QLineEdit()
+        form.addRow(tr("dlg.find"), self.find_edit)
+        form.addRow(tr("dlg.replace"), self.replace_edit)
+        self.font_chk = QCheckBox(tr("dlg.change"))
+        self.font_combo = FontCombo(registry)
+        if font_name:
+            self.font_combo.reload(font_name)
+        self.font_combo.setEnabled(False)
+        self.font_chk.toggled.connect(self.font_combo.setEnabled)
+        row = QHBoxLayout()
+        row.addWidget(self.font_chk)
+        row.addWidget(self.font_combo, 1)
+        form.addRow(tr("lbl.font"), row)
+        self.size_chk = QCheckBox(tr("dlg.change"))
+        self.size_spin = QDoubleSpinBox()
+        self.size_spin.setRange(1, 400)
+        self.size_spin.setDecimals(1)
+        self.size_spin.setValue(size)
+        self.size_spin.setEnabled(False)
+        self.size_chk.toggled.connect(self.size_spin.setEnabled)
+        row = QHBoxLayout()
+        row.addWidget(self.size_chk)
+        row.addWidget(self.size_spin, 1)
+        form.addRow(tr("lbl.size"), row)
+        self.color_chk = QCheckBox(tr("dlg.change"))
+        self.color_btn = ColorButton(color)
+        self.color_btn.setEnabled(False)
+        self.color_chk.toggled.connect(self.color_btn.setEnabled)
+        row = QHBoxLayout()
+        row.addWidget(self.color_chk)
+        row.addWidget(self.color_btn, 1)
+        form.addRow(tr("dlg.color"), row)
+        lay.addLayout(form)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        lay.addWidget(buttons)
+
+    def find(self) -> str:
+        return self.find_edit.text()
+
+    def replace(self) -> str:
+        return self.replace_edit.text()
+
+    def font(self) -> Optional[FontInfo]:
+        return self.font_combo.font_info() if self.font_chk.isChecked() else None
+
+    def size(self) -> Optional[float]:
+        return self.size_spin.value() if self.size_chk.isChecked() else None
+
+    def color(self):
+        return (self.color_btn.color() or (0, 0, 0)) if self.color_chk.isChecked() else None
+
+    def has_changes(self) -> bool:
+        return bool(self.find()) or self.font_chk.isChecked() or self.size_chk.isChecked() or self.color_chk.isChecked()
+
+
 class SaveAsDialog(QDialog):
     def __init__(self, default_path: str, title: str = "", author: str = "", parent=None):
         super().__init__(parent)

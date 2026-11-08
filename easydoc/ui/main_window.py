@@ -12,11 +12,11 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QDoubleSpinBox, QFileDialog, 
                                QSizePolicy, QSplitter, QTabBar, QToolBar, QVBoxLayout, QWidget)
 
 from .. import __version__
-from ..core import pages, printserver, shapes, standards, text_edit, updater
+from ..core import multi, pages, printserver, shapes, standards, text_edit, updater
 from ..core.document import PdfDocument
 from ..core.fonts import FontRegistry, default_registry
 from . import printing
-from .dialogs import (ColorButton, ExtractDialog, FontCombo, InsertPageDialog, MergeDialog, PrinterSetupDialog,
+from .dialogs import (BulkTextDialog, ColorButton, ExtractDialog, FontCombo, InsertPageDialog, MergeDialog, PrinterSetupDialog,
                       SaveAsDialog, SplitDialog, TextDialog)
 from .i18n import tr
 from .icons import icon
@@ -123,11 +123,10 @@ class MainWindow(QMainWindow):
             v.span_clicked.connect(lambda sp, v=v: self._edit_span(sp, v))
             v.text_point_clicked.connect(lambda pt, v=v: self._new_text(pt, v))
             v.shape_drawn.connect(lambda k, a, b, v=v: self._shape_drawn(k, a, b, v))
-            v.annot_selected.connect(lambda x, v=v: self._on_annot_selected(x, v))
-            v.annot_moved.connect(lambda x, dx, dy, v=v: self._annot_moved(x, dx, dy, v))
+            v.selection_changed.connect(lambda n, v=v: self._on_selection_changed(v))
+            v.items_moved.connect(lambda items, dx, dy, v=v: self._items_moved(items, dx, dy, v))
+            v.edit_selection_requested.connect(lambda items, v=v: self._edit_selection(items, v))
             v.drawing_clicked.connect(lambda d, v=v: self._erase_drawing(d, v))
-            v.span_moved.connect(lambda sp, dx, dy, v=v: self._span_moved(sp, dx, dy, v))
-            v.drawing_moved.connect(lambda d, dx, dy, v=v: self._drawing_moved(d, dx, dy, v))
             v.pressed.connect(lambda v=v: self._set_active_view(v))
         self.view.files_dropped.connect(self.open_paths)
         self.thumbs.files_dropped.connect(self.open_paths)
@@ -178,6 +177,8 @@ class MainWindow(QMainWindow):
         self.act_undo = act("act.undo", self.undo, QKeySequence.Undo, icon_name="undo")
         self.act_redo = act("act.redo", self.redo, QKeySequence.Redo, icon_name="redo")
         self.act_delete_sel = act("act.delete_sel", self.delete_selected, QKeySequence.Delete)
+        self.act_edit_sel = act("act.edit_sel", self.edit_selected_text, "Ctrl+Return")
+        self.act_select_all = act("act.select_all", self.select_all, QKeySequence.SelectAll)
         self.act_rot_left = act("act.rot_left", lambda: self.rotate(-90), "Ctrl+[", icon_name="rot_left")
         self.act_rot_right = act("act.rot_right", lambda: self.rotate(90), "Ctrl+]", icon_name="rot_right")
         self.act_del_page = act("act.del_page", self.delete_page, "Ctrl+Shift+D", icon_name="del_page")
@@ -217,7 +218,7 @@ class MainWindow(QMainWindow):
                   self.act_vprinter, self.act_vprinter_setup, None, self.act_merge, None, self.act_quit):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu(tr("menu.edit"))
-        for a in (self.act_undo, self.act_redo, None, self.act_delete_sel):
+        for a in (self.act_undo, self.act_redo, None, self.act_select_all, self.act_edit_sel, self.act_delete_sel):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu(tr("menu.page"))
         for a in (self.act_rot_left, self.act_rot_right, None, self.act_insert_page, self.act_del_page,
@@ -337,7 +338,7 @@ class MainWindow(QMainWindow):
         tp = self._tpdf()
         self.act_undo.setEnabled(bool(tp and tp.can_undo))
         self.act_redo.setEnabled(bool(tp and tp.can_redo))
-        self.act_delete_sel.setEnabled(self._target_view().selected_xref() >= 0)
+        self._update_selection_actions()
         self.act_close_tab.setEnabled(bool(self.docs))
         self.act_split_view.setEnabled(bool(self.docs))
         self._sync_split_pane()
@@ -378,12 +379,18 @@ class MainWindow(QMainWindow):
             return
         self._active_view = view
         self.split_pane.set_active(view is self.split_pane.view)
-        self.act_delete_sel.setEnabled(self._target_view().selected_xref() >= 0)
+        self._update_selection_actions()
         self._update_state()
 
-    def _on_annot_selected(self, xref: int, view: PageView) -> None:
+    def _on_selection_changed(self, view: PageView) -> None:
         if view is self._target_view():
-            self.act_delete_sel.setEnabled(xref >= 0)
+            self._update_selection_actions()
+
+    def _update_selection_actions(self) -> None:
+        view = self._target_view()
+        self.act_delete_sel.setEnabled(view.has_selection())
+        self.act_edit_sel.setEnabled(bool(view.selected_spans()))
+        self.act_select_all.setEnabled(view.pdf is not None and view.pdf.page_count > 0)
 
     def _toggle_split_view(self, on: bool) -> None:
         self.split_pane.setVisible(on and bool(self.docs))
@@ -675,11 +682,46 @@ class MainWindow(QMainWindow):
         if pdf and pdf.redo():
             self._update_state()
 
+    def select_all(self) -> None:
+        self._target_view().select_all()
+
     def delete_selected(self) -> None:
         view = self._target_view()
-        xref = view.selected_xref()
-        if view.pdf and xref >= 0:
-            shapes.delete_annot(view.pdf, view.pno, xref)
+        items = view.selected_items()
+        if not view.pdf or not items:
+            return
+        try:
+            multi.delete_items(view.pdf, view.pno, [i.obj for i in items if i.kind == "span"],
+                               [i.obj for i in items if i.kind == "drawing"],
+                               [i.obj for i in items if i.kind == "annot"])
+        except Exception as exc:  # noqa: BLE001
+            self._error(exc)
+
+    def edit_selected_text(self) -> None:
+        view = self._target_view()
+        self._edit_selection(view.selected_items(), view)
+
+    def _edit_selection(self, items, view: PageView) -> None:
+        """Edit the text of the selection: one text -> normal dialog, several -> bulk dialog."""
+        spans = [i.obj for i in items if i.kind == "span"]
+        if not spans:
+            return
+        if len(spans) == 1:
+            self._edit_span(spans[0], view)
+            return
+        first = spans[0]
+        match = self.registry.match_pdf_font(first.font, first.flags)
+        dlg = BulkTextDialog(self.registry, len(spans), first.size, first.color, match.name, self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        if not dlg.has_changes():
+            self.statusBar().showMessage(tr("msg.bulk_nothing"), 4000)
+            return
+        try:
+            multi.edit_spans(view.pdf, spans, dlg.find(), dlg.replace(), dlg.font(), dlg.size(), dlg.color(),
+                             registry=self.registry)
+        except Exception as exc:  # noqa: BLE001
+            self._error(exc)
 
     def _edit_span(self, span: text_edit.TextSpan, view: PageView) -> None:
         match = self.registry.match_pdf_font(span.font, span.flags)
@@ -709,20 +751,13 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             self._error(exc)
 
-    def _span_moved(self, span: text_edit.TextSpan, dx: float, dy: float, view: PageView) -> None:
+    def _items_moved(self, items, dx: float, dy: float, view: PageView) -> None:
         try:
-            text_edit.move_span(view.pdf, span, dx, dy, registry=self.registry)
+            multi.move_items(view.pdf, view.pno, [i.obj for i in items if i.kind == "span"],
+                             [i.obj for i in items if i.kind == "drawing"],
+                             [i.obj for i in items if i.kind == "annot"], dx, dy, registry=self.registry)
         except Exception as exc:  # noqa: BLE001
             self._error(exc)
-
-    def _drawing_moved(self, drawing: shapes.Drawing, dx: float, dy: float, view: PageView) -> None:
-        try:
-            shapes.move_drawing(view.pdf, view.pno, drawing, dx, dy)
-        except Exception as exc:  # noqa: BLE001
-            self._error(exc)
-
-    def _annot_moved(self, xref: int, dx: float, dy: float, view: PageView) -> None:
-        shapes.move_annot(view.pdf, view.pno, xref, dx, dy)
 
     def _erase_drawing(self, drawing: shapes.Drawing, view: PageView) -> None:
         shapes.delete_drawing(view.pdf, view.pno, drawing.rect)

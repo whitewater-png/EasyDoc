@@ -8,6 +8,7 @@ each operation having to implement its own inverse.
 from __future__ import annotations
 
 import warnings
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
@@ -27,6 +28,8 @@ class PdfDocument:
         self._undo: list[bytes] = []
         self._redo: list[bytes] = []
         self._listeners: list[Callable[[], None]] = []
+        self._batch_depth = 0
+        self._batch_pending = False
 
     # ------------------------------------------------------------------ io
     @classmethod
@@ -76,6 +79,8 @@ class PdfDocument:
     # ------------------------------------------------------------- undo/redo
     def snapshot(self) -> None:
         """Record the current state so that the next mutation can be undone."""
+        if self._batch_depth:
+            return
         self._undo.append(self.doc.tobytes(garbage=0, deflate=False))
         if len(self._undo) > MAX_UNDO:
             del self._undo[0]
@@ -113,7 +118,26 @@ class PdfDocument:
     def mutated(self) -> None:
         """Call after a change has been applied to ``self.doc``."""
         self.dirty = True
+        if self._batch_depth:
+            self._batch_pending = True
+            return
         self.notify()
+
+    @contextmanager
+    def batch(self):
+        """Group several operations into ONE undo step and one change notification."""
+        outer = self._batch_depth == 0
+        if outer:
+            self.snapshot()
+        self._batch_depth += 1
+        try:
+            yield self
+        finally:
+            self._batch_depth -= 1
+            if outer and self._batch_pending:
+                self._batch_pending = False
+                self.dirty = True
+                self.notify()
 
     # --------------------------------------------------------------- helpers
     @property

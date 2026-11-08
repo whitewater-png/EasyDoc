@@ -380,3 +380,97 @@ def test_update_dialog_and_menu(window, app, monkeypatch):
     assert shown == ["9.0.0", "9.0.0"]
     window.act_auto_update.setChecked(False)
     assert window.settings.value("update/auto", True, type=bool) is False
+
+
+def _multi_page(window, app):
+    """Replace page 1 content with three known text lines + one drawn rectangle."""
+    from easydoc.core import text_edit
+
+    page = window.pdf.page(0)
+    for i, label in enumerate(("alpha", "bravo", "charlie")):
+        page.insert_text((80, 120 + i * 60), label, fontsize=18)
+    page.draw_rect(pymupdf.Rect(300, 100, 380, 160), color=(0, 0, 1))
+    window.pdf.mutated()
+    window.pdf.dirty = False
+    app.processEvents()
+    spans = {s.text: s for s in text_edit.get_spans(window.pdf.page(0)) if s.text in ("alpha", "bravo", "charlie")}
+    return spans
+
+
+def _click(view, app, scene_pt, modifier=Qt.NoModifier):
+    vp = view.viewport()
+    a = view.mapFromScene(QPointF(*scene_pt))
+    QTest.mousePress(vp, Qt.LeftButton, modifier, a)
+    QTest.mouseRelease(vp, Qt.LeftButton, modifier, a)
+    app.processEvents()
+
+
+def _center(span, z):
+    return ((span.bbox.x0 + span.bbox.x1) / 2 * z, (span.bbox.y0 + span.bbox.y1) / 2 * z)
+
+
+def test_shift_click_builds_multi_selection(window, app):
+    spans = _multi_page(window, app)
+    window.snap_check.setChecked(False)
+    view, z = window.view, window.view.zoom
+    window._set_tool(Tool.SELECT)
+    _click(view, app, _center(spans["alpha"], z), Qt.ShiftModifier)
+    _click(view, app, _center(spans["charlie"], z), Qt.ShiftModifier)
+    assert sorted(s.text for s in view.selected_spans()) == ["alpha", "charlie"]
+    _click(view, app, _center(spans["charlie"], z), Qt.ShiftModifier)      # toggles off
+    assert [s.text for s in view.selected_spans()] == ["alpha"]
+    _click(view, app, (z * 500, z * 700))                                   # empty space clears
+    assert not view.has_selection()
+
+
+def test_rubber_band_selects_and_group_moves_as_one_undo(window, app):
+    from easydoc.core import text_edit
+
+    spans = _multi_page(window, app)
+    window.snap_check.setChecked(False)
+    view, z = window.view, window.view.zoom
+    window._set_tool(Tool.SELECT)
+    # drag a box around alpha + bravo + the rectangle (not charlie)
+    _drag(view, app, (z * 40, z * 70), (z * 420, z * 190))
+    texts = {s.text for s in view.selected_spans()}
+    assert {"alpha", "bravo"} <= texts and "charlie" not in texts
+    assert any(i.kind == "drawing" for i in view.selected_items())
+    undo_before = len(window.pdf._undo)
+    _drag(view, app, _center(spans["alpha"], z), (_center(spans["alpha"], z)[0] + 50, _center(spans["alpha"], z)[1] + 40))
+    assert len(window.pdf._undo) == undo_before + 1                         # whole group = one undo step
+    now = {s.text: s for s in text_edit.get_spans(window.pdf.page(0))}
+    assert abs(now["alpha"].bbox.x0 - spans["alpha"].bbox.x0 - 50 / z) < 1.5
+    assert abs(now["bravo"].bbox.y0 - spans["bravo"].bbox.y0 - 40 / z) < 1.5
+    assert abs(now["charlie"].bbox.x0 - spans["charlie"].bbox.x0) < 0.5     # untouched
+    rects = [d.rect for d in __import__("easydoc.core.shapes", fromlist=["x"]).list_drawings(window.pdf.page(0))]
+    assert any(abs(r.x0 - (300 + 50 / z)) < 1.5 for r in rects)
+    window.undo()
+    back = {s.text: s for s in text_edit.get_spans(window.pdf.page(0))}
+    assert abs(back["alpha"].bbox.x0 - spans["alpha"].bbox.x0) < 0.5
+
+
+def test_bulk_text_edit_changes_all_selected(window, app):
+    from easydoc.core import multi, text_edit
+
+    spans = _multi_page(window, app)
+    chosen = [spans["alpha"], spans["bravo"]]
+    n_undo = len(window.pdf._undo)
+    multi.edit_spans(window.pdf, chosen, find="a", replace="A", size=24, color=(1, 0, 0), registry=window.registry)
+    assert len(window.pdf._undo) == n_undo + 1
+    now = {s.text: s for s in text_edit.get_spans(window.pdf.page(0))}
+    assert "AlphA" in now and "brAvo" in now and "charlie" in now
+    assert abs(now["AlphA"].size - 24) < 0.5 and now["AlphA"].color == (1.0, 0.0, 0.0)
+    assert abs(now["charlie"].size - 18) < 0.5
+
+
+def test_delete_key_removes_whole_selection(window, app):
+    from easydoc.core import text_edit
+
+    spans = _multi_page(window, app)
+    window.snap_check.setChecked(False)
+    view, z = window.view, window.view.zoom
+    _click(view, app, _center(spans["alpha"], z), Qt.ShiftModifier)
+    _click(view, app, _center(spans["bravo"], z), Qt.ShiftModifier)
+    window.delete_selected()
+    left = [s.text for s in text_edit.get_spans(window.pdf.page(0))]
+    assert "alpha" not in left and "bravo" not in left and "charlie" in left

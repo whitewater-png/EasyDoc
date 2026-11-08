@@ -193,18 +193,20 @@ def delete_drawing(pdf: PdfDocument, pno: int, rect: pymupdf.Rect) -> None:
     pdf.mutated()
 
 
-def move_drawing(pdf: PdfDocument, pno: int, drawing: Drawing, dx: float, dy: float) -> bool:
-    """Move a content-stream vector drawing by removing it and redrawing it offset."""
-    d = drawing.data
-    if not d or not d.get("items"):
-        return False
-    page = pdf.page(pno)
-    pdf.snapshot()
+def remove_drawing(page: pymupdf.Page, rect: pymupdf.Rect) -> None:
+    """Redaction-remove the line art covered by ``rect`` (no snapshot / notification)."""
     m = 2.0
-    page.add_redact_annot(pymupdf.Rect(drawing.rect) + (-m, -m, m, m))
+    page.add_redact_annot(pymupdf.Rect(rect) + (-m, -m, m, m))
     page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
                           graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
                           text=pymupdf.PDF_REDACT_TEXT_NONE)
+
+
+def redraw_drawing(page: pymupdf.Page, drawing: Drawing, dx: float, dy: float) -> bool:
+    """Draw ``drawing`` again, offset by (dx, dy) (no snapshot / notification)."""
+    d = drawing.data
+    if not d or not d.get("items"):
+        return False
     shape = page.new_shape()
     off = pymupdf.Point(dx, dy)
     for item in d["items"]:
@@ -232,5 +234,16 @@ def move_drawing(pdf: PdfDocument, pno: int, drawing: Drawing, dx: float, dy: fl
         lineJoin=d.get("lineJoin") or 0,
     )
     shape.commit()
+    return True
+
+
+def move_drawing(pdf: PdfDocument, pno: int, drawing: Drawing, dx: float, dy: float) -> bool:
+    """Move a content-stream vector drawing by removing it and redrawing it offset."""
+    if not drawing.data or not drawing.data.get("items"):
+        return False
+    page = pdf.page(pno)
+    pdf.snapshot()
+    remove_drawing(page, drawing.rect)
+    redraw_drawing(page, drawing, dx, dy)
     pdf.mutated()
     return True

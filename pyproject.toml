@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easydoc"
-version = "0.2.0"
+version = "0.3.0"
 description = "Lightweight cross-platform GUI PDF editor (text, shapes, pages, PDF/A & PDF/X export)"
 readme = "README.md"
 requires-python = ">=3.10"
