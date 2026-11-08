@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import re
+import ssl
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -68,12 +69,25 @@ def pick_asset(release: Release, system: Optional[str] = None, arch: Optional[st
     return None
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """TLS context with a CA bundle that also exists inside a frozen app.
+
+    A PyInstaller build has no system OpenSSL cert directory, so the default
+    context fails with CERTIFICATE_VERIFY_FAILED; certifi's bundle is shipped
+    with the app instead (falls back to the system store when unavailable)."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:  # noqa: BLE001
+        return ssl.create_default_context()
+
+
 def fetch_latest(url: Optional[str] = None, timeout: float = TIMEOUT) -> Release:
     """Query the latest published release.  Raises on network / format errors."""
     url = url or os.environ.get("EASYDOC_UPDATE_URL") or API_URL
     req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
                                                "User-Agent": f"EasyDoc/{__version__}"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - fixed https endpoint
+    with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as resp:  # noqa: S310 - fixed https endpoint
         data = json.loads(resp.read().decode("utf-8"))
     return parse_release(data)
 
@@ -107,7 +121,7 @@ def download(asset: Asset, dest_dir: str | Path, progress: Optional[Callable[[in
     part = target.with_suffix(target.suffix + ".part")
     req = urllib.request.Request(asset.url, headers={"User-Agent": f"EasyDoc/{__version__}"})
     done = 0
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp, open(part, "wb") as fh:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=TIMEOUT, context=_ssl_context()) as resp, open(part, "wb") as fh:  # noqa: S310
         total = int(resp.headers.get("Content-Length") or asset.size or 0)
         while True:
             if should_cancel and should_cancel():

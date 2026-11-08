@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easydoc"
-version = "0.3.0"
+version = "0.3.1"
 description = "Lightweight cross-platform GUI PDF editor (text, shapes, pages, PDF/A & PDF/X export)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,6 +14,7 @@ dependencies = [
     "PyMuPDF>=1.24",
     "pikepdf>=8.0",
     "PySide6-Essentials>=6.5",
+    "certifi",
 ]
 
 [project.optional-dependencies]
