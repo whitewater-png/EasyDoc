@@ -517,6 +517,7 @@ class MainWindow(QMainWindow):
             self.open_path(path)
 
     def open_path(self, path: str) -> None:
+        path = os.path.normpath(path)      # Qt hands over "C:/x/y.pdf" on Windows
         # Already open? Just switch to its tab.
         try:
             real = os.path.realpath(path)

@@ -22,3 +22,24 @@ def sample_pdf(tmp_path):
     doc.save(str(path))
     doc.close()
     return str(path)
+
+
+_exit_status = {"code": None}
+
+
+def pytest_sessionfinish(session, exitstatus):
+    _exit_status["code"] = int(exitstatus)
+
+
+def pytest_unconfigure(config):
+    """Skip interpreter finalisation (CI only).  With some PyMuPDF/SWIG builds (seen on
+    CPython 3.11 / Linux) the final garbage collection aborts with "bool_dealloc" *after*
+    every test passed, turning a green run red.  Runs after all output is written and
+    preserves the real exit status."""
+    import os
+    import sys
+
+    if os.environ.get("CI") and _exit_status["code"] is not None:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(_exit_status["code"])
