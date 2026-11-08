@@ -37,7 +37,6 @@ Python のインストールは不要です。
 |---|---|---|
 | Windows 10/11 (64bit) | `easydoc-<ver>-windows-x86_64.zip` | 展開して `easydoc\easydoc.exe` を実行。初回は SmartScreen の「詳細情報 → 実行」が必要(未署名のため) |
 | macOS (Apple Silicon) | `easydoc-<ver>-darwin-arm64.dmg` | 開いて `easydoc.app` をアプリケーションへ。初回は右クリック → 開く(未署名のため) |
-| macOS (Intel) | `easydoc-<ver>-darwin-x86_64.dmg` | 同上 |
 | Linux (x86_64) | `easydoc-<ver>-linux-x86_64.tar.gz` | 展開して `./easydoc/easydoc` |
 
 バンドルは PyInstaller 製で、Python 本体・Qt・MuPDF・QPDF を同梱(展開後 約 250MB)。
@@ -50,7 +49,7 @@ pip install -e . pyinstaller
 python packaging/build.py        # release/ に zip / dmg / tar.gz ができる
 ```
 
-タグ `v*` を push すると GitHub Actions が 4 種類(Windows / macOS arm64 / macOS Intel / Linux)をビルドして Release に添付します。
+タグ `v*` を push すると GitHub Actions が 3 種類(Windows / macOS arm64 / Linux)をビルドして Release に添付します。
 
 ### B. Python パッケージとして
 

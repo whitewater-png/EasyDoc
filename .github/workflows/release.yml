@@ -20,8 +20,6 @@ jobs:
             artifact: "release/*.zip"
           - os: macos-latest        # Apple Silicon
             artifact: "release/*.dmg"
-          - os: macos-13            # Intel
-            artifact: "release/*.dmg"
           - os: ubuntu-22.04
             artifact: "release/*.tar.gz"
     steps:
