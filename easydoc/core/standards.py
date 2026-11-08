@@ -267,6 +267,13 @@ def save_document(pdf: PdfDocument, dst: str | Path, opts: Optional[SaveOptions]
 
     with tempfile.TemporaryDirectory() as tmp:
         work = os.path.join(tmp, "work.pdf")
+        if opts.compress:
+            # Fonts added by text edits (notably the CJK fallback) are embedded in
+            # full; subsetting keeps the file small.
+            try:
+                pdf.doc.subset_fonts()
+            except Exception:  # pragma: no cover - best effort
+                pass
         pdf.doc.save(work, garbage=3 if opts.compress else 0, deflate=opts.compress, clean=False)
 
         # Plain PDF -------------------------------------------------------

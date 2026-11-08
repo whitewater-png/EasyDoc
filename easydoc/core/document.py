@@ -31,7 +31,15 @@ class PdfDocument:
     # ------------------------------------------------------------------ io
     @classmethod
     def open(cls, path: str | Path, password: Optional[str] = None) -> "PdfDocument":
-        doc = pymupdf.open(str(path))
+        # Read the whole file into memory and release the file handle at once:
+        # this lets "Save" overwrite the original file on every OS (Windows
+        # refuses to replace a file that is still open).
+        data = Path(path).read_bytes()
+        ext = Path(path).suffix.lower().lstrip(".") or "pdf"
+        try:
+            doc = pymupdf.open(stream=data, filetype=ext)
+        except Exception:
+            doc = pymupdf.open(stream=data)
         if doc.needs_pass:
             if password is None or not doc.authenticate(password):
                 raise PermissionError("This PDF is password protected.")

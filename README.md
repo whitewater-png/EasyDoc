@@ -21,6 +21,8 @@ Windows / macOS / Linux で同じコードがそのまま動きます。
 | さまざまなフォント | OS にインストール済みの TTF/OTF/TTC を自動検出して埋め込み。足りない文字(日本語など)は CJK フォールバックで自動補完。任意のフォントファイルの追加も可能 |
 | 軽量 | 依存は PyMuPDF・pikepdf・PySide6-Essentials の 3 つのみ。Electron 等のブラウザランタイム不要 |
 | 共通言語 | 100% Python。ネイティブ処理は MuPDF / QPDF / Qt (いずれも 3 OS 対応) |
+| 印刷 | OS の印刷ダイアログから任意のプリンターに出力(ページ範囲・部数指定可)。ページごとに向きを自動調整 |
+| 他アプリからの「印刷→easydoc」 | 「easydoc PDF」という仮想プリンターを OS に登録し、Word/Excel/PowerPoint など任意のアプリの印刷メニューから easydoc に直接 PDF を送れる(後述) |
 
 元に戻す / やり直す (Undo/Redo) は全操作に対応しています(最大 30 段階)。
 
@@ -51,6 +53,35 @@ PDF バージョン設定・sRGB 出力インテント・XMP の規格識別・�
 保存時にその旨の警告を表示し、未埋め込みフォント名も列挙します。
 本番用途では Ghostscript をインストールし、必要に応じて [veraPDF](https://verapdf.org/) 等で検証してください。
 
+## 印刷と仮想プリンター
+
+### プリンターに印刷する
+
+ツールバーの「印刷」(Ctrl+P / ⌘P) で OS 標準の印刷ダイアログが開きます。ページ範囲・現在のページ・部数を指定でき、
+横長ページは自動で横向きに出力されます。ページは MuPDF で最大 300dpi にラスタライズして送ります。
+
+### 他のアプリから easydoc に「印刷」する(仮想プリンター)
+
+Word・Excel・PowerPoint・ブラウザなど、印刷できるアプリなら何でも「easydoc PDF」プリンターを選ぶだけで
+easydoc に PDF が開きます。仕組みは次のとおりです。
+
+1. easydoc が `127.0.0.1:9100` (変更可) で RAW 印刷データを待ち受ける(ツールバー「印刷を受け付ける」をオン。状態は記憶されます)。
+2. OS 側に、そのポートへ出力するプリンターキューを **1 回だけ** 作成する(ファイル → 「easydoc PDF」プリンターを設定…)。
+   ダイアログの「今すぐプリンターを作成」で管理者権限を求めて自動登録するか、表示されたコマンドを手動で実行します。
+3. 届いたデータ(PDF / XPS / PostScript)を PDF に変換し、`inbox` フォルダに保存して easydoc で開きます。
+   編集中の未保存文書がある場合は新しいウィンドウで開きます。
+
+| OS | 作成されるキュー | 届く形式 | 補足 |
+|---|---|---|---|
+| Windows | Standard TCP/IP ポート + 「Microsoft Print To PDF」ドライバー | PDF (XPS/PS も自動判別) | `Add-PrinterPort` / `Add-Printer` (PowerShell、管理者権限) |
+| macOS | `lpadmin … -v socket://127.0.0.1:9100 -m raw` | PDF | 印刷ダイアログの「PDF として保存」でも同様のことができます |
+| Linux (CUPS) | `lpadmin … -v socket://127.0.0.1:9100 -m raw` | PDF (PS は Ghostscript で変換) | GTK/Qt/LibreOffice は PDF を送ります |
+
+受信フォルダ: Windows `%LOCALAPPDATA%\easydoc\inbox`、macOS `~/Library/Application Support/easydoc/inbox`、Linux `~/.local/share/easydoc/inbox`。
+
+> 注意: Windows 実機での動作は未検証です。Microsoft Print To PDF ドライバーが TCP ポートへ PDF 以外(XPS)を送る場合も
+> 自動変換しますが、PostScript ドライバーを使う場合は Ghostscript が必要です。
+
 ## 使い方(主な操作)
 
 | 操作 | 方法 |
@@ -64,6 +95,9 @@ PDF バージョン設定・sRGB 出力インテント・XMP の規格識別・�
 | 回転 | Ctrl+[ / Ctrl+] |
 | ズーム | Ctrl+ホイール、Ctrl+±、Ctrl+0 (幅合わせ)、Ctrl+1 (実寸) |
 | 規格保存 | ファイル → 名前を付けて保存 / 規格書き出し (Ctrl+Shift+S は分割) |
+| 印刷 | Ctrl+P / ⌘P |
+| 他アプリから受信 | ツールバー「印刷を受け付ける」をオン → 他アプリで「easydoc PDF」に印刷 |
+| ファイルを開く | ウィンドウに PDF をドラッグ&ドロップ(複数なら 2 つ目以降は結合) |
 
 UI 言語は OS のロケールが日本語なら日本語、それ以外は英語になります。
 `EASYDOC_LANG=en` / `ja` で強制できます。
@@ -80,11 +114,15 @@ easydoc/
     shapes.py          図形(注釈)の追加・移動・削除、埋め込み図形の消去
     fonts.py           システムフォント検出・キャッシュ・PDF フォント名マッチング
     standards.py       PDF バージョン / PDF/A / PDF/X 保存 (Ghostscript or best effort)
+    printserver.py     仮想プリンター(RAW/9100 受信サーバー、PDF/XPS/PS 変換、OS へのキュー登録)
   ui/                  PySide6 の画面
     main_window.py     メニュー・ツールバー・操作の結線
     page_view.py       ページキャンバス(ツール・座標変換・ホバー/選択)
     thumbnails.py      サムネイル一覧(D&D 並べ替え)
-    dialogs.py         テキスト編集・保存・分割・抽出・結合ダイアログ
+    dialogs.py         テキスト編集・保存・分割・抽出・結合・仮想プリンター設定ダイアログ
+    printing.py        Qt 印刷(QPrinter へのページ描画、印刷ダイアログ)
+    icons.py           QPainter で描画するアイコン(画像アセット不要)
+    theme.py           Fusion ベースのライトテーマ(QSS)
     i18n.py            日本語 / 英語の文言
 tests/                 pytest(コア + オフスクリーン GUI スモーク)
 ```
@@ -124,6 +162,9 @@ unchanged on Windows, macOS and Linux.
   (drag & drop thumbnails).
 * Save as a specific PDF version (1.4–2.0), PDF/A-1b/2b/2u/3b or PDF/X-3 — a real conversion
   when Ghostscript is installed, a clearly-labelled best-effort otherwise — with optional linearization.
+* Print to any printer through the native print dialog.
+* Virtual printer: register an "easydoc PDF" printer queue (TCP/IP port on 127.0.0.1) and print into
+  easydoc from Word, Excel, PowerPoint or any other application; PDF, XPS and PostScript jobs are converted.
 * Full undo / redo.
 
 ```bash

@@ -6,11 +6,11 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
                                QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-                               QPlainTextEdit, QPushButton, QRadioButton, QSpinBox, QVBoxLayout, QWidget)
+                               QMessageBox, QPlainTextEdit, QPushButton, QRadioButton, QSpinBox, QVBoxLayout, QWidget)
 
-from ..core import standards
+from ..core import printserver, standards
 from ..core.fonts import FontInfo, FontRegistry
 from ..core.pages import PAGE_SIZES
 from .i18n import tr
@@ -31,7 +31,7 @@ class ColorButton(QPushButton):
         super().__init__(parent)
         self.allow_none = allow_none
         self._color: Optional[QColor] = rgb_to_qcolor(color) if color is not None else None
-        self.setFixedWidth(64)
+        self.setFixedSize(58, 26)
         self.clicked.connect(self._pick)
         self._update()
 
@@ -48,7 +48,7 @@ class ColorButton(QPushButton):
             self.setStyleSheet("")
         else:
             self.setText("")
-            self.setStyleSheet(f"background-color: {self._color.name()}; border: 1px solid #555;")
+            self.setStyleSheet(f"background-color: {self._color.name()}; border: 1px solid #c3cbd9; border-radius: 6px;")
 
     def _pick(self) -> None:
         dlg = QColorDialog(self._color or QColor(0, 0, 0), self)
@@ -372,3 +372,86 @@ class InsertPageDialog(QDialog):
 
     def after(self) -> bool:
         return self.pos_combo.currentData() == "after"
+
+
+class PrinterSetupDialog(QDialog):
+    """Explains and (optionally) installs the OS printer queue for the virtual printer."""
+
+    def __init__(self, port: int, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("dlg.vprinter"))
+        self.port = port
+        lay = QVBoxLayout(self)
+        intro = QLabel(tr("dlg.vprinter_intro"))
+        intro.setWordWrap(True)
+        lay.addWidget(intro)
+        note_key = {"windows": "dlg.vprinter_note_win", "macos": "dlg.vprinter_note_mac"}.get(
+            printserver.os_hint(), "dlg.vprinter_note_linux")
+        note = QLabel(tr(note_key))
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #6b7280;")
+        lay.addWidget(note)
+
+        form = QFormLayout()
+        self.port_spin = QSpinBox()
+        self.port_spin.setRange(1024, 65535)
+        self.port_spin.setValue(port)
+        self.port_spin.valueChanged.connect(self._refresh_cmd)
+        form.addRow(tr("dlg.vprinter_port"), self.port_spin)
+        lay.addLayout(form)
+
+        lay.addWidget(QLabel(tr("dlg.vprinter_cmd")))
+        self.cmd = QPlainTextEdit()
+        self.cmd.setReadOnly(True)
+        self.cmd.setMaximumHeight(90)
+        self.cmd.setStyleSheet("font-family: Menlo, Consolas, monospace;")
+        lay.addWidget(self.cmd)
+
+        self.status = QLabel()
+        self.status.setWordWrap(True)
+        lay.addWidget(self.status)
+
+        row = QHBoxLayout()
+        copy_btn = QPushButton(tr("dlg.vprinter_copy"))
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self.cmd.toPlainText()))
+        install_btn = QPushButton(tr("dlg.vprinter_install"))
+        install_btn.setDefault(True)
+        install_btn.clicked.connect(lambda: self._run(False))
+        remove_btn = QPushButton(tr("dlg.vprinter_remove"))
+        remove_btn.clicked.connect(lambda: self._run(True))
+        row.addWidget(copy_btn)
+        row.addStretch(1)
+        row.addWidget(remove_btn)
+        row.addWidget(install_btn)
+        lay.addLayout(row)
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
+        lay.addWidget(buttons)
+        self.resize(620, 460)
+        self._refresh_cmd()
+        self._refresh_status()
+
+    def _refresh_cmd(self) -> None:
+        self.port = self.port_spin.value()
+        self.cmd.setPlainText("\n".join(printserver.setup_commands(self.port)))
+
+    def _refresh_status(self) -> None:
+        state = printserver.printer_installed()
+        if state is True:
+            self.status.setText(tr("dlg.vprinter_status_yes", printserver.PRINTER_NAME))
+            self.status.setStyleSheet("color: #2e7d32;")
+        elif state is False:
+            self.status.setText(tr("dlg.vprinter_status_no", printserver.PRINTER_NAME))
+            self.status.setStyleSheet("color: #c62828;")
+        else:
+            self.status.setText(tr("dlg.vprinter_status_unknown"))
+            self.status.setStyleSheet("color: #6b7280;")
+
+    def _run(self, remove: bool) -> None:
+        ok, output = printserver.install_printer(self.port, remove=remove)
+        if ok:
+            QMessageBox.information(self, tr("dlg.vprinter"), tr("dlg.vprinter_result_ok") if not remove else output or "OK")
+        else:
+            QMessageBox.warning(self, tr("dlg.vprinter"), tr("dlg.vprinter_result_fail", output))
+        self._refresh_status()

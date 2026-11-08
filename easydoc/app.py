@@ -15,10 +15,12 @@ def main(argv: list[str] | None = None) -> int:
     from PySide6.QtWidgets import QApplication
 
     from .ui.main_window import MainWindow
+    from .ui.theme import apply_theme
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName("easydoc")
     app.setOrganizationName("easydoc")
+    apply_theme(app)
     win = MainWindow()
     win.show()
     if args.file:

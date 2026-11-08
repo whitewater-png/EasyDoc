@@ -111,6 +111,59 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "filter.open": ("Documents (*.pdf *.xps *.epub *.png *.jpg *.jpeg *.tiff *.svg);;All files (*)",
                     "ドキュメント (*.pdf *.xps *.epub *.png *.jpg *.jpeg *.tiff *.svg);;すべてのファイル (*)"),
     "filter.font": ("Fonts (*.ttf *.otf *.ttc)", "フォント (*.ttf *.otf *.ttc)"),
+    # printing
+    "act.print": ("&Print…", "印刷(&P)…"),
+    "act.vprinter": ("Receive print jobs (virtual printer)", "印刷を受け付ける(仮想プリンター)"),
+    "act.vprinter_setup": ("Set up the \"easydoc PDF\" printer…", "「easydoc PDF」プリンターを設定…"),
+    "msg.printed": ("Sent {0} pages to the printer", "{0} ページをプリンターに送信しました"),
+    "msg.print_failed": ("Printing failed:\n{0}", "印刷に失敗しました:\n{0}"),
+    "msg.vprinter_on": ("Virtual printer listening on 127.0.0.1:{0}", "仮想プリンター待受中 127.0.0.1:{0}"),
+    "msg.vprinter_off": ("Virtual printer stopped", "仮想プリンターを停止しました"),
+    "msg.vprinter_fail": ("Could not start the virtual printer on port {0}:\n{1}",
+                          "ポート {0} で仮想プリンターを開始できません:\n{1}"),
+    "msg.job_received": ("Print job received: {0}", "印刷ジョブを受信: {0}"),
+    "msg.job_failed": ("A print job could not be converted:\n{0}", "印刷ジョブを変換できませんでした:\n{0}"),
+    "dlg.vprinter": ("Virtual printer setup", "仮想プリンターの設定"),
+    "dlg.vprinter_intro": (
+        "Print from Word, Excel, PowerPoint or any other application straight into easydoc.\n"
+        "easydoc listens on a local network port; the operating system needs a printer queue that "
+        "sends its output to that port. Create it once with the command below, then keep "
+        "\"Receive print jobs\" switched on while printing.",
+        "Word・Excel・PowerPoint など任意のアプリの「印刷」から、easydoc に直接 PDF を送れます。\n"
+        "easydoc はローカルのネットワークポートで待ち受けます。OS 側に、そのポートへ出力するプリンター"
+        "キューを 1 回だけ作成してください(下のコマンド)。印刷するときは「印刷を受け付ける」をオンにしておきます。"),
+    "dlg.vprinter_port": ("Port", "ポート"),
+    "dlg.vprinter_cmd": ("Command (run as administrator / with sudo):", "コマンド(管理者権限 / sudo で実行):"),
+    "dlg.vprinter_install": ("Create printer now", "今すぐプリンターを作成"),
+    "dlg.vprinter_remove": ("Remove printer", "プリンターを削除"),
+    "dlg.vprinter_copy": ("Copy command", "コマンドをコピー"),
+    "dlg.vprinter_status_yes": ("Printer \"{0}\" is installed.", "プリンター「{0}」は設定済みです。"),
+    "dlg.vprinter_status_no": ("Printer \"{0}\" is not installed yet.", "プリンター「{0}」は未設定です。"),
+    "dlg.vprinter_status_unknown": ("Printer status could not be determined.", "プリンターの状態を確認できませんでした。"),
+    "dlg.vprinter_note_win": (
+        "Windows: uses the built-in \"Microsoft Print To PDF\" driver on a Standard TCP/IP port. "
+        "If a job arrives as XPS or PostScript it is converted automatically (PostScript needs Ghostscript).",
+        "Windows: 標準の「Microsoft Print To PDF」ドライバーを Standard TCP/IP ポートで使用します。"
+        "XPS や PostScript で届いた場合も自動変換します(PostScript は Ghostscript が必要)。"),
+    "dlg.vprinter_note_mac": (
+        "macOS: creates a raw CUPS queue; applications send PDF directly. "
+        "(macOS can also \"Save as PDF\" from any print dialog, then open the file in easydoc.)",
+        "macOS: raw の CUPS キューを作成します。アプリは PDF をそのまま送ります。"
+        "(macOS の印刷ダイアログ「PDF として保存」→ easydoc で開く、でも同じことができます)"),
+    "dlg.vprinter_note_linux": (
+        "Linux: creates a raw CUPS queue; GTK/Qt/LibreOffice applications send PDF directly. "
+        "PostScript jobs are converted with Ghostscript.",
+        "Linux: raw の CUPS キューを作成します。GTK/Qt/LibreOffice 系アプリは PDF をそのまま送ります。"
+        "PostScript は Ghostscript で変換します。"),
+    "dlg.vprinter_result_ok": ("Printer created.", "プリンターを作成しました。"),
+    "dlg.vprinter_result_fail": ("Command failed:\n{0}", "コマンドが失敗しました:\n{0}"),
+    "grp.file": ("FILE", "ファイル"),
+    "grp.edit": ("EDIT", "編集"),
+    "grp.tools": ("TOOLS", "ツール"),
+    "grp.page": ("PAGES", "ページ"),
+    "grp.view": ("VIEW", "表示"),
+    "grp.style": ("STYLE", "スタイル"),
+    "lbl.drop_hint": ("Drop a PDF here, or use File ▸ Open", "ここに PDF をドロップ、またはファイル ▸ 開く"),
 }
 
 

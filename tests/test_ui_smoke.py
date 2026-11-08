@@ -23,8 +23,11 @@ def app():
 
 
 @pytest.fixture
-def window(app, sample_pdf):
-    win = MainWindow(registry=FontRegistry(scan=False), scan_fonts=False)
+def window(app, sample_pdf, tmp_path):
+    from PySide6.QtCore import QSettings
+
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.IniFormat)
+    win = MainWindow(registry=FontRegistry(scan=False), scan_fonts=False, settings=settings)
     win.resize(1200, 800)
     win.show()
     win.open_path(sample_pdf)
@@ -100,9 +103,66 @@ def test_reorder_from_thumbnails(window, app):
     assert window.pdf.page(0).get_text().startswith("Page 3")
 
 
-def test_new_document(app):
-    win = MainWindow(registry=FontRegistry(scan=False), scan_fonts=False)
+def test_new_document(app, tmp_path):
+    from PySide6.QtCore import QSettings
+
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.IniFormat)
+    win = MainWindow(registry=FontRegistry(scan=False), scan_fonts=False, settings=settings)
     win.new_document()
     assert win.pdf.page_count == 1
     win.pdf.dirty = False
     win.close()
+
+
+def test_edit_text_then_save_roundtrip(window, app, tmp_path):
+    """Edit a span through the window, overwrite-save, reopen from disk."""
+    from easydoc.core import text_edit
+
+    path = window.pdf.path
+    span = text_edit.get_spans(window.pdf.page(0))[0]
+    text_edit.replace_span(window.pdf, span, "Saved edit 保存", registry=window.registry)
+    assert window.pdf.dirty
+    window.save()
+    assert not window.pdf.dirty
+    assert "*" not in window.windowTitle()
+    with pymupdf.open(path) as d:
+        txt = d[0].get_text()
+    assert "Saved edit 保存" in txt and "Hello World" not in txt
+    assert os.path.getsize(path) < 200_000  # fallback font was subsetted
+
+
+def test_virtual_printer_toggle_and_job(window, app, tmp_path, monkeypatch, sample_pdf):
+    import socket
+    import time
+
+    from easydoc.core import printserver
+
+    monkeypatch.setattr(printserver, "inbox_dir", lambda: tmp_path)
+    window.settings.setValue("vprinter/port", 0)  # ephemeral port
+    window.act_vprinter.setChecked(True)
+    assert window.print_server is not None and window.print_server.running
+    port = window.print_server.port
+    with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
+        s.sendall(open(sample_pdf, "rb").read())
+    deadline = time.time() + 10
+    while time.time() < deadline and not (window.pdf.path or "").startswith(str(tmp_path)):
+        app.processEvents()
+        time.sleep(0.05)
+    assert (window.pdf.path or "").startswith(str(tmp_path))
+    window.act_vprinter.setChecked(False)
+    assert not window.print_server.running
+
+
+def test_toolbar_has_buttons_for_every_feature(window):
+    from PySide6.QtWidgets import QToolBar
+
+    actions = set()
+    for tb in window.findChildren(QToolBar):
+        actions.update(a for a in tb.actions() if not a.isSeparator() and a.text())
+    for a in (window.act_new, window.act_open, window.act_save, window.act_saveas, window.act_print,
+              window.act_vprinter, window.act_undo, window.act_redo, window.act_rot_left, window.act_rot_right,
+              window.act_insert_page, window.act_del_page, window.act_move_up, window.act_move_down,
+              window.act_merge, window.act_extract, window.act_split, window.act_zoom_in, window.act_zoom_out,
+              window.act_zoom_fit, *window.tool_actions.values()):
+        assert a in actions, a.text()
+        assert not a.icon().isNull(), a.text()
