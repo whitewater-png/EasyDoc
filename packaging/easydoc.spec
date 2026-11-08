@@ -97,7 +97,7 @@ if IS_MAC:
         info_plist={
             "CFBundleName": "EasyDoc",
             "CFBundleDisplayName": "EasyDoc",
-            "CFBundleShortVersionString": "0.3.1",
+            "CFBundleShortVersionString": "0.3.2",
             "NSHighResolutionCapable": True,
             "NSPrincipalClass": "NSApplication",
             "CFBundleDocumentTypes": [{

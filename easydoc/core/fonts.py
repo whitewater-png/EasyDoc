@@ -98,6 +98,28 @@ def _normalize(name: str) -> str:
     return re.sub(r"\s+", " ", name).strip().lower()
 
 
+_CJK_MARKERS = ("gothic", "mincho", "ipa", "hiragino", "meiryo", "yugo", "yumin", "kozuka", "kozgo",
+                "kozmin", "msgothic", "mspgothic", "msmincho", "notosanscjk", "notoserifcjk", "sansjp",
+                "serifjp", "sourcehan", "cjk", "simsun", "simhei", "songti", "heiti", "pingfang",
+                "malgun", "batang", "gulim", "microsoftyahei", "mingliu", "kaiti", "fangsong", "takao",
+                "vlgothic", "ricoh", "morisawa", "hgp", "hgs", "hgm", "idgothic", "tsukushi", "osaka")
+
+
+def _is_cjk_font(lowered: str) -> bool:
+    return any(m in lowered for m in _CJK_MARKERS)
+
+
+def _base14_family(lowered: str) -> Optional[str]:
+    """Family of a Base-14 look-alike ('Helvetica', 'Times' or 'Courier') or None."""
+    if lowered.startswith(("nimbussans", "helvetica", "arial", "liberationsans")):
+        return "Helvetica"
+    if lowered.startswith(("nimbusroman", "timesnewroman", "times", "liberationserif")):
+        return "Times"
+    if lowered.startswith(("nimbusmono", "courier", "liberationmono")):
+        return "Courier"
+    return None
+
+
 class FontRegistry:
     """Thread-safe registry of built-in and installed fonts."""
 
@@ -205,6 +227,21 @@ class FontRegistry:
         bold = bool(flags & 16)
         target = _normalize(pdf_fontname)
         lowered = target.replace(" ", "")
+        # Fonts easydoc itself writes with (and what MuPDF reports for the Base-14
+        # substitutes) must map back to the very same font; otherwise every move
+        # changes the typeface (MuPDF also flags NimbusSans as "serif").
+        if "droid sans fallback" in target or _is_cjk_font(lowered):
+            return self._fonts["CJK Fallback (Droid Sans Fallback)"]
+        base = _base14_family(lowered)
+        if base:
+            bold = bold or "bold" in lowered
+            italic = italic or "italic" in lowered or "oblique" in lowered
+            key = {(False, False): base, (True, False): base + " Bold",
+                   (False, True): base + " Italic", (True, True): base + " Bold Italic"}
+            if base == "Times":
+                key = {(False, False): "Times Roman", (True, False): "Times Bold",
+                       (False, True): "Times Italic", (True, True): "Times Bold Italic"}
+            return self._fonts[key[(bold, italic)]]
         if "bold" in lowered:
             bold = True
         if "italic" in lowered or "oblique" in lowered:

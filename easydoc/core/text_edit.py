@@ -76,22 +76,25 @@ def span_at(page: pymupdf.Page, point: pymupdf.Point) -> Optional[TextSpan]:
     return None
 
 
-def _runs_with_fallback(text: str, font: pymupdf.Font, fallback: pymupdf.Font):
-    """Split text into (chunk, font) runs so that glyphs missing from ``font``
-    are rendered with ``fallback`` (which covers CJK)."""
-    runs: list[tuple[str, pymupdf.Font]] = []
-    current: list[str] = []
-    current_font = font
-    for ch in text:
-        use = font if (ch.isspace() or font.has_glyph(ord(ch))) else fallback
-        if use is not current_font and current:
-            runs.append(("".join(current), current_font))
-            current = []
-        current_font = use
-        current.append(ch)
-    if current:
-        runs.append(("".join(current), current_font))
-    return runs
+def _pick_font(text: str, font: pymupdf.Font, fallback: pymupdf.Font) -> pymupdf.Font:
+    """One font for the whole line.  Mixing fonts inside a line made MuPDF report it as
+    several spans, which then split apart when moved; when ``font`` lacks a glyph the
+    CJK fallback (which also covers Latin) is used for the entire line instead."""
+    if all(ch.isspace() or font.has_glyph(ord(ch)) for ch in text):
+        return font
+    return fallback
+
+
+def redact_box(bbox: pymupdf.Rect) -> pymupdf.Rect:
+    """Redaction rectangle for a span: pulled in on every side so that glyphs of
+    neighbouring spans/lines (whose boxes merely touch this one) are left alone."""
+    box = pymupdf.Rect(bbox)
+    dy = box.height * 0.2
+    box.x0 += 0.5
+    box.x1 -= 0.5
+    box.y0 += dy
+    box.y1 -= dy
+    return box
 
 
 def write_text(page: pymupdf.Page, origin: pymupdf.Point, text: str, font_info: FontInfo,
@@ -101,13 +104,15 @@ def write_text(page: pymupdf.Page, origin: pymupdf.Point, text: str, font_info: 
     fallback = pymupdf.Font("cjk")
     writer = pymupdf.TextWriter(page.rect)
     pos = pymupdf.Point(origin)
+    # NBSP & friends are missing from many fonts (the glyph is silently dropped, so the
+    # gap collapsed and the line fell apart into separate spans); write plain spaces.
+    text = text.translate({0xA0: " ", 0x2007: " ", 0x202F: " ", 0x3000: "\u3000"})
     lines = text.split("\n")
     for i, line in enumerate(lines):
         x = pos.x
         y = pos.y + i * size * 1.2
-        for chunk, f in _runs_with_fallback(line, font, fallback):
-            writer.append((x, y), chunk, font=f, fontsize=size)
-            x += f.text_length(chunk, fontsize=size)
+        f = _pick_font(line, font, fallback)
+        writer.append((x, y), line, font=f, fontsize=size)
     writer.write_text(page, color=tuple(color))
     return writer.text_rect
 
@@ -125,11 +130,7 @@ def replace_span(pdf: PdfDocument, span: TextSpan, new_text: str,
     color = color if color is not None else span.color
 
     pdf.snapshot()
-    # A slightly deflated box avoids clipping glyphs of neighbouring spans.
-    box = pymupdf.Rect(span.bbox)
-    box.x0 += 0.5
-    box.x1 -= 0.5
-    page.add_redact_annot(box)
+    page.add_redact_annot(redact_box(span.bbox))
     page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
                           graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
                           text=pymupdf.PDF_REDACT_TEXT_REMOVE)
@@ -157,10 +158,7 @@ def move_span(pdf: PdfDocument, span: TextSpan, dx: float, dy: float,
     page = pdf.page(span.page)
     font_info = registry.match_pdf_font(span.font, span.flags)
     pdf.snapshot()
-    box = pymupdf.Rect(span.bbox)
-    box.x0 += 0.5
-    box.x1 -= 0.5
-    page.add_redact_annot(box)
+    page.add_redact_annot(redact_box(span.bbox))
     page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
                           graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
                           text=pymupdf.PDF_REDACT_TEXT_REMOVE)

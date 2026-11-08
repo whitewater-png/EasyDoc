@@ -8,7 +8,7 @@ import pymupdf
 from . import shapes
 from .document import PdfDocument
 from .fonts import FontInfo, FontRegistry, default_registry
-from .text_edit import TextSpan, write_text
+from .text_edit import TextSpan, redact_box, write_text
 
 
 def _remove_spans(page: pymupdf.Page, spans: Sequence[TextSpan]) -> None:
@@ -17,10 +17,7 @@ def _remove_spans(page: pymupdf.Page, spans: Sequence[TextSpan]) -> None:
     if not spans:
         return
     for span in spans:
-        box = pymupdf.Rect(span.bbox)
-        box.x0 += 0.5
-        box.x1 -= 0.5
-        page.add_redact_annot(box)
+        page.add_redact_annot(redact_box(span.bbox))
     page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
                           graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
                           text=pymupdf.PDF_REDACT_TEXT_REMOVE)
