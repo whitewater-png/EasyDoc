@@ -43,7 +43,7 @@ KNOWN_BINARIES = [
     # (component, regex on the path inside the bundle, "/"-separated, lower-case).
     # Specific components first: the CPython pattern for extension modules is
     # deliberately generic and must only catch what nothing else claims.
-    ("Leafweaving", r"^(leafweaving(\.exe)?|leafweaving\.app/contents/macos/leafweaving)$"),
+    ("Leafweaving", r"(^|/)leafweaving(\.exe)?$"),   # launcher: dist/leafweaving/leafweaving[.exe], .app/Contents/MacOS/leafweaving
     ("PyInstaller bootloader/runtime", r"(^|/)(pyi_rth_.*|pyinstaller.*)"),
     ("PyMuPDF / MuPDF", r"(^|/)(pymupdf/.*|libmupdf.*|mupdf.*\.dll|_mupdf.*|_extra.*|_features.*|_tgif.*)"),
     ("pikepdf (qpdf, libjpeg-turbo, OpenSSL, zlib)", r"(^|/)(pikepdf/.*|pikepdf\.libs/.*|libqpdf.*|libjpeg.*|"
