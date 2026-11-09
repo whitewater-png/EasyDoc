@@ -91,7 +91,10 @@ def sources(versions: dict[str, str]) -> list[tuple[str, str | None, str]]:
     qt = versions["pyside6-essentials"]
     major_minor = ".".join(qt.split(".")[:2])
     for url, name in [
-        (f"https://mupdf.com/downloads/archive/mupdf-{mupdf}-source.tar.gz", f"mupdf-{mupdf}-source.tar.gz"),
+        # mupdf.com redirects to this GitHub release asset anyway; going there
+        # directly avoids the occasional 504 from mupdf.com.  Same file, same hash.
+        (f"https://github.com/ArtifexSoftware/mupdf/releases/download/{mupdf}/mupdf-{mupdf}-source.tar.gz",
+         f"mupdf-{mupdf}-source.tar.gz"),
         (f"https://download.qt.io/archive/qt/{major_minor}/{qt}/single/qt-everywhere-src-{qt}.tar.xz",
          f"qt-everywhere-src-{qt}.tar.xz"),
         (f"https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-{qt}-src/"
