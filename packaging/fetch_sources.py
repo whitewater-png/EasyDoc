@@ -45,18 +45,35 @@ def pinned() -> dict[str, str]:
     return out
 
 
-def fetch(url: str, dest: Path, sha256: str | None = None) -> Path:
+def fetch(url: str, dest: Path, sha256: str | None = None, attempts: int = 6) -> Path:
+    """Download with retries: mupdf.com and the Qt mirrors answer 5xx or stall now
+    and then, and a release must not fail on that.  The checksum makes retrying
+    (and mirrors) safe."""
+    import time
+    import urllib.error
+
     print(f"  {url}", flush=True)
-    h = hashlib.sha256()
-    req = urllib.request.Request(url, headers={"User-Agent": "leafweaving-release"})
-    with urllib.request.urlopen(req, timeout=120) as resp, open(dest, "wb") as fh:  # noqa: S310 - fixed hosts
-        while chunk := resp.read(1 << 20):
-            fh.write(chunk)
-            h.update(chunk)
-    if sha256 and h.hexdigest() != sha256:
-        dest.unlink()
-        raise SystemExit(f"checksum mismatch for {url}")
-    return dest
+    last: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        h = hashlib.sha256()
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "leafweaving-release"})
+            with urllib.request.urlopen(req, timeout=180) as resp, open(dest, "wb") as fh:  # noqa: S310 - fixed hosts
+                while chunk := resp.read(1 << 20):
+                    fh.write(chunk)
+                    h.update(chunk)
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as exc:
+            last = exc
+            dest.unlink(missing_ok=True)
+            wait = min(60, 5 * 2 ** (attempt - 1))
+            print(f"    attempt {attempt}/{attempts} failed ({exc}); retrying in {wait}s", flush=True)
+            time.sleep(wait)
+            continue
+        if sha256 and h.hexdigest() != sha256:
+            dest.unlink()
+            raise SystemExit(f"checksum mismatch for {url}")
+        return dest
+    raise SystemExit(f"could not download {url} after {attempts} attempts: {last}")
 
 
 def sources(versions: dict[str, str]) -> list[tuple[str, str | None, str]]:
