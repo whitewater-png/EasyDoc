@@ -1,8 +1,11 @@
-"""The Leafwright logo: an "E" and a "D" sharing one stem on a gradient squircle."""
+"""The Leafwright logo: "L" and "W" written as one stroke that sprouts a leaf,
+on a green gradient squircle."""
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
+
+TEAL = "#12a383"
 
 
 def draw_logo(size: int = 512) -> QPixmap:
@@ -13,12 +16,12 @@ def draw_logo(size: int = 512) -> QPixmap:
     s = size / 100.0
     p.scale(s, s)
 
-    # Squircle body with a diagonal indigo -> blue -> cyan gradient.
+    # Squircle body with a diagonal green -> teal -> sky gradient.
     body = QRectF(4, 4, 92, 92)
     g = QLinearGradient(body.topLeft(), body.bottomRight())
-    g.setColorAt(0.0, QColor("#6d5dfc"))
-    g.setColorAt(0.55, QColor("#2f6fed"))
-    g.setColorAt(1.0, QColor("#12c2e9"))
+    g.setColorAt(0.0, QColor("#2ecc71"))
+    g.setColorAt(0.55, QColor(TEAL))
+    g.setColorAt(1.0, QColor("#0e9fc4"))
     p.setPen(Qt.NoPen)
     p.setBrush(g)
     p.drawRoundedRect(body, 22, 22)
@@ -29,44 +32,52 @@ def draw_logo(size: int = 512) -> QPixmap:
     p.setBrush(glow)
     p.drawRoundedRect(body, 22, 22)
 
-    def stroke(color: QColor, w: float = 8.5) -> None:
-        pen = QPen(color, w)
-        pen.setCapStyle(Qt.RoundCap)
-        pen.setJoinStyle(Qt.RoundJoin)
-        p.setPen(pen)
-        p.setBrush(Qt.NoBrush)
-
-    # Soft drop shadow of the letters.
-    for dy, alpha in ((2.2, 40),):
-        p.save()
-        p.translate(0, dy)
-        _letters(p, stroke, QColor(10, 20, 80, alpha), QColor(10, 20, 80, alpha))
-        p.restore()
-    _letters(p, stroke, QColor("#ffffff"), QColor("#b6f3ff"))
+    # Soft drop shadow, then the mark itself.
+    p.save()
+    p.translate(0, 2.2)
+    shadow = QColor(10, 40, 40, 45)
+    _mark(p, shadow, shadow, None)
+    p.restore()
+    _mark(p, QColor("#ffffff"), QColor("#d4f7a8"), QColor(TEAL))
     p.end()
     return pm
 
 
-def _letters(p: QPainter, stroke, e_color: QColor, d_color: QColor) -> None:
-    # D: shared stem at x=50, bowl to the right.
-    d = QPainterPath()
-    d.moveTo(50, 27)
-    d.lineTo(58, 27)
-    d.arcTo(QRectF(34, 27, 48, 46), 90, -180)
-    d.lineTo(50, 73)
-    d.closeSubpath()
-    stroke(d_color)
-    p.drawPath(d)
-    # E: stem + three bars ending on the shared stem.
-    e = QPainterPath()
-    e.moveTo(50, 27)
-    e.lineTo(25, 27)
-    e.lineTo(25, 73)
-    e.lineTo(50, 73)
-    e.moveTo(25, 50)
-    e.lineTo(44, 50)
-    stroke(e_color)
-    p.drawPath(e)
+def _mark(p: QPainter, stroke_color: QColor, leaf_color: QColor, vein_color) -> None:
+    # One stroke: the L's stem and foot run straight into the W, whose last
+    # rising stroke sprouts the leaf.
+    path = QPainterPath()
+    path.moveTo(22, 27)
+    path.lineTo(22, 74)
+    path.lineTo(37, 74)
+    path.lineTo(49, 45)
+    path.lineTo(61, 74)
+    path.lineTo(71, 44)
+    pen = QPen(stroke_color, 8.5)
+    pen.setCapStyle(Qt.RoundCap)
+    pen.setJoinStyle(Qt.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.NoBrush)
+    p.drawPath(path)
+
+    # Pointed leaf from the stroke's end towards the upper right.
+    bx, by, tx, ty, half = 70.0, 47.0, 88.0, 16.0, 13.6
+    dx, dy = tx - bx, ty - by
+    length = (dx * dx + dy * dy) ** 0.5
+    nx, ny = -dy / length, dx / length
+    mx, my = bx + dx * 0.45, by + dy * 0.45
+    leaf = QPainterPath()
+    leaf.moveTo(bx, by)
+    leaf.quadTo(mx + nx * half, my + ny * half, tx, ty)
+    leaf.quadTo(mx - nx * half, my - ny * half, bx, by)
+    p.setPen(Qt.NoPen)
+    p.setBrush(leaf_color)
+    p.drawPath(leaf)
+    if vein_color is not None:
+        vein = QPen(vein_color, 1.6)
+        vein.setCapStyle(Qt.RoundCap)
+        p.setPen(vein)
+        p.drawLine(QPointF(bx + dx * 0.18, by + dy * 0.18), QPointF(bx + dx * 0.82, by + dy * 0.82))
 
 
 def logo_icon() -> QIcon:
