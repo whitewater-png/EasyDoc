@@ -1,8 +1,8 @@
 """Redaction: content under the area is gone for good and the black box is locked."""
 import pymupdf
 
-from leafwright.core import multi, redact, shapes
-from leafwright.core.document import PdfDocument
+from leafweaving.core import multi, redact, shapes
+from leafweaving.core.document import PdfDocument
 
 AREA = pymupdf.Rect(60, 80, 260, 110)   # covers "Page 1 Hello World" on line 1 only
 
@@ -249,7 +249,7 @@ def test_link_outside_area_on_rotated_page_is_kept():
 
 
 def test_marks_follow_extracted_and_merged_pages(sample_pdf, tmp_path):
-    from leafwright.core import pages
+    from leafweaving.core import pages
 
     pdf = PdfDocument.open(sample_pdf)
     redact.redact(pdf, 1, [AREA])
@@ -311,3 +311,14 @@ def test_remove_crossing_deletes_the_whole_signature_from_the_file():
     assert [d for d in page.get_drawings() if d.get("fill") == (0.8999999761581421, 0.8999999761581421, 1.0)] == []
     saved = PdfDocument(pymupdf.open("pdf", pdf.to_bytes(deflate=False)))
     assert [d for d in saved.page(0).get_drawings() if d.get("color") == (0.0, 0.0, 1.0)] == []
+
+
+def test_marks_written_by_the_leafwright_versions_are_still_honoured(sample_pdf):
+    """0.5.x stored the areas under /LeafwrightRedactions; those files must stay locked."""
+    pdf = PdfDocument.open(sample_pdf)
+    page = pdf.page(0)
+    pdf.doc.xref_set_key(page.xref, "LeafwrightRedactions", "[60 80 260 110]")
+    assert redact.marks(page) == [pymupdf.Rect(60, 80, 260, 110)]
+    redact.redact(pdf, 0, [pymupdf.Rect(300, 300, 320, 320)])
+    assert len(redact.marks(pdf.page(0))) == 2            # old + new, under the new key
+    assert pdf.doc.xref_get_key(pdf.page(0).xref, redact.MARK_KEY)[0] == "array"

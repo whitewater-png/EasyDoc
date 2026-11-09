@@ -3,8 +3,8 @@ import os
 import pymupdf
 import pytest
 
-from leafwright.core import pages
-from leafwright.core.document import PdfDocument
+from leafweaving.core import pages
+from leafweaving.core.document import PdfDocument
 
 
 def test_parse_ranges():

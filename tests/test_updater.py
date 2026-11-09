@@ -5,7 +5,7 @@ import threading
 
 import pytest
 
-from leafwright.core import updater
+from leafweaving.core import updater
 
 
 def test_version_compare():
@@ -19,9 +19,9 @@ def test_version_compare():
 def _release():
     return updater.parse_release({
         "tag_name": "v0.3.0", "body": "notes", "html_url": "https://example/rel",
-        "assets": [{"name": "leafwright-0.3.0-windows-x86_64.zip", "browser_download_url": "u1", "size": 1},
-                   {"name": "leafwright-0.3.0-darwin-arm64.dmg", "browser_download_url": "u2", "size": 2},
-                   {"name": "leafwright-0.3.0-linux-x86_64.tar.gz", "browser_download_url": "u3", "size": 3}]})
+        "assets": [{"name": "leafweaving-0.3.0-windows-x86_64.zip", "browser_download_url": "u1", "size": 1},
+                   {"name": "leafweaving-0.3.0-darwin-arm64.dmg", "browser_download_url": "u2", "size": 2},
+                   {"name": "leafweaving-0.3.0-linux-x86_64.tar.gz", "browser_download_url": "u3", "size": 3}]})
 
 
 def test_pick_asset_per_os():
@@ -43,7 +43,7 @@ def server(tmp_path):
         def do_GET(self):
             if self.path == "/latest":
                 body = json.dumps({"tag_name": "v9.9.9", "body": "n", "html_url": "h", "assets": [
-                    {"name": "../evil/leafwright-9.9.9-linux-x86_64.tar.gz",
+                    {"name": "../evil/leafweaving-9.9.9-linux-x86_64.tar.gz",
                      "browser_download_url": f"http://127.0.0.1:{self.server.server_port}/pkg", "size": len(payload)}]}).encode()
             else:
                 body = payload

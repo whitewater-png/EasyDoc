@@ -1,8 +1,8 @@
 import pikepdf
 import pytest
 
-from leafwright.core import standards
-from leafwright.core.document import PdfDocument
+from leafweaving.core import standards
+from leafweaving.core.document import PdfDocument
 
 
 def test_plain_and_version(sample_pdf, tmp_path):

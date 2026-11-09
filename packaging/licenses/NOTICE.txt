@@ -1,0 +1,112 @@
+Leafweaving — license notice for the ready-to-run packages
+=========================================================
+
+Leafweaving
+  Copyright (C) 2026 Leafweaving contributors
+  Released under the MIT License (LICENSE.txt).
+
+The ready-to-run packages (the .dmg / .zip / .tar.gz files on the GitHub
+Releases page) also contain third-party libraries.  Because one of them,
+PyMuPDF / MuPDF, is licensed under the GNU Affero General Public License
+version 3, **each package as a whole is distributed to you under the terms of
+the GNU AGPL-3.0** (AGPL-3.0.txt): you may run, study, redistribute and modify
+it under that license.  The MIT License of Leafweaving's own code is compatible
+with this and still applies to that code on its own.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the license texts for details.
+
+Corresponding source
+--------------------
+The complete corresponding source is offered from the same place as the
+packages: every GitHub release of Leafweaving has these files attached next to
+the packages (https://github.com/whitewater-png/Leafweaving/releases), and
+SHA256SUMS.txt there covers them:
+
+* leafweaving-<version>-src.tar.gz — Leafweaving itself at the release tag,
+  including the build scripts (packaging/) and the exact third-party
+  versions that were bundled (packaging/constraints.txt).
+* pymupdf-<version>.tar.gz and mupdf-<version>-source.tar.gz — PyMuPDF and
+  the MuPDF release it is built from (AGPL-3.0).
+* qt-everywhere-src-<version>.tar.xz and
+  pyside-setup-everywhere-src-<version>.tar.xz — Qt and Qt for Python /
+  Shiboken (LGPL-3.0).
+* pikepdf-<version>.tar.gz and certifi-<version>.tar.gz (MPL-2.0).
+
+CPython's source for the bundled interpreter version (see
+third-party/CPython/VERSION.txt) is at https://www.python.org/downloads/source/.
+
+All third-party components are used unmodified.  To rebuild a package with
+your own versions of these components (including replacing the Qt shared
+libraries), follow the build instructions in the README at the release tag
+(python packaging/build.py).
+
+Bundled third-party components
+------------------------------
+MuPDF and PyMuPDF
+  Copyright (C) 2004-2026 Artifex Software, Inc.
+  GNU AGPL-3.0 — https://mupdf.com , https://github.com/pymupdf/PyMuPDF
+  Notices of the libraries and fonts built into MuPDF: third-party/MuPDF-thirdparty/
+    FreeType (FreeType License — portions of this software are copyright
+      (C) 2006-2026 The FreeType Project (https://www.freetype.org).
+      All rights reserved.), HarfBuzz (MIT), libjpeg (IJG — this software is
+      based in part on the work of the Independent JPEG Group), OpenJPEG
+      (BSD-2-Clause), jbig2dec (AGPL-3.0), Little CMS (MIT), zlib (Zlib),
+      brotli (MIT), gumbo-parser (Apache-2.0), extract (AGPL-3.0), MuJS
+      (ISC), Leptonica (BSD-2-Clause), Tesseract (Apache-2.0), Zint
+      (BSD-3-Clause), zxing-cpp (Apache-2.0), cmark-gfm (MIT/BSD-2-Clause).
+    Fonts: URW Base 35 (SIL OFL 1.1, Copyright (C) 2016 (URW)++ Design &
+      Development), Noto (SIL OFL 1.1, Copyright Google Inc.), Charis SIL
+      (SIL OFL 1.1, Copyright (C) SIL International), Droid Sans Fallback
+      (Apache-2.0, Copyright (C) The Android Open Source Project) — fonts/ in
+      that folder.
+
+pikepdf
+  Copyright (C) 2026 James R. Barlow
+  MPL-2.0 — https://github.com/pikepdf/pikepdf
+  Built into pikepdf (notices in third-party/pikepdf-*/licenses/third-party-licenses/):
+    qpdf (Apache-2.0, Copyright (C) 2005-2026 Jay Berkenbilt and Manfred
+    Holger — its NOTICE is third-party/qpdf-NOTICE.md), libjpeg-turbo (IJG
+    and BSD-3-Clause), OpenSSL (Apache-2.0), zlib (Zlib), and others.
+
+Qt 6, Qt for Python (PySide6) and Shiboken6
+  Copyright (C) The Qt Company Ltd. and other contributors
+  GNU LGPL-3.0 — https://www.qt.io , https://code.qt.io/cgit/pyside/pyside-setup.git
+  Third-party code inside the Qt libraries (PCRE2, double-conversion, FreeType,
+  HarfBuzz, libpng, libjpeg-turbo, zlib, MD4C, TinyCBOR, ...): see
+  third-party/Qt-thirdparty/ATTRIBUTIONS.txt and the license texts beside it.
+
+certifi
+  Copyright (C) Kenneth Reitz and contributors; the CA bundle is Mozilla's
+  MPL-2.0 — https://github.com/certifi/python-certifi
+
+CPython
+  Copyright (C) 2001-2026 Python Software Foundation; portions (C) Corporation
+  for National Research Initiatives and Stichting Mathematisch Centrum
+  PSF License — https://www.python.org  (third-party/CPython/)
+  Libraries linked into the interpreter (OpenSSL, libffi, Expat, bzip2, xz,
+  mpdecimal, SQLite, zlib): third-party/CPython-deps/
+
+PyInstaller (bootloader and run-time hooks)
+  Copyright (C) 2005-2026 PyInstaller Development Team
+  GPL-2.0-or-later with the Bootloader Exception / Apache-2.0 (run-time hooks)
+  — https://github.com/pyinstaller/pyinstaller  (third-party/pyinstaller-*/)
+
+On Linux the package relies on the shared libraries of the operating system
+(Qt's platform plugins load them at run time; see the README for the package
+names) and does not include them.  On Windows the Microsoft Visual C++
+runtime libraries required by CPython and Qt are included under Microsoft's
+redistribution terms.
+
+Qt (LGPL-3.0): the Qt libraries are shipped as separate shared libraries /
+frameworks in the package, so you may replace them with a compatible build of
+your own.  The full LGPL-3.0 text is in LGPL-3.0.txt; it incorporates the
+GPL-3.0 (GPL-3.0.txt).
+
+Ghostscript is not included.  Leafweaving runs a separately installed
+Ghostscript as an external program when one is present.
+
+A complete list of every native library in this package and the component it
+belongs to is produced at build time (build/BINARIES.txt) and checked against
+the components above.

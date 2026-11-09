@@ -5,16 +5,16 @@ import pymupdf
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("LEAFWRIGHT_LANG", "en")
+os.environ.setdefault("LEAFWEAVING_LANG", "en")
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 from PySide6.QtCore import QPoint, QPointF, Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
-from leafwright.core.document import PdfDocument  # noqa: E402
-from leafwright.core.fonts import FontRegistry  # noqa: E402
-from leafwright.ui.main_window import MainWindow  # noqa: E402
-from leafwright.ui.page_view import Tool  # noqa: E402
+from leafweaving.core.document import PdfDocument  # noqa: E402
+from leafweaving.core.fonts import FontRegistry  # noqa: E402
+from leafweaving.ui.main_window import MainWindow  # noqa: E402
+from leafweaving.ui.page_view import Tool  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +116,7 @@ def test_new_document(app, tmp_path):
 
 def test_edit_text_then_save_roundtrip(window, app, tmp_path):
     """Edit a span through the window, overwrite-save, reopen from disk."""
-    from leafwright.core import text_edit
+    from leafweaving.core import text_edit
 
     path = window.pdf.path
     span = text_edit.get_spans(window.pdf.page(0))[0]
@@ -135,9 +135,13 @@ def test_virtual_printer_toggle_and_job(window, app, tmp_path, monkeypatch, samp
     import socket
     import time
 
-    from leafwright.core import printserver
+    from leafweaving.core import printserver
+
+    from PySide6.QtWidgets import QMessageBox
 
     monkeypatch.setattr(printserver, "inbox_dir", lambda: tmp_path)
+    asked = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: asked.append(self.text()) or QMessageBox.StandardButton.Open)
     window.settings.setValue("vprinter/port", 0)  # ephemeral port
     window.act_vprinter.setChecked(True)
     assert window.print_server is not None and window.print_server.running
@@ -145,12 +149,41 @@ def test_virtual_printer_toggle_and_job(window, app, tmp_path, monkeypatch, samp
     with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
         s.sendall(open(sample_pdf, "rb").read())
     deadline = time.time() + 10
-    while time.time() < deadline and not (window.pdf.path or "").startswith(str(tmp_path)):
+    inbox_job = str(tmp_path / "print_")      # sample.pdf is in tmp_path too: wait for the job itself
+    while time.time() < deadline and not (window.pdf.path or "").startswith(inbox_job):
         app.processEvents()
         time.sleep(0.05)
-    assert (window.pdf.path or "").startswith(str(tmp_path))
+    assert (window.pdf.path or "").startswith(inbox_job)
+    assert asked and "3" in asked[0]          # the user was asked before it opened
+    # Two more jobs while a question is up: asked one after the other, not nested.
+    depth, worst = [0], [0]
+
+    def exec_(self):
+        depth[0] += 1
+        worst[0] = max(worst[0], depth[0])
+        window._on_print_job(str(sample_pdf)) if len(asked) == 1 else None   # arrives mid-question
+        asked.append(self.text())
+        depth[0] -= 1
+        return QMessageBox.StandardButton.Ignore
+
+    monkeypatch.setattr(QMessageBox, "exec", exec_)
+    window._on_print_job(str(sample_pdf))
+    assert len(asked) == 3 and worst[0] == 1
     window.act_vprinter.setChecked(False)
     assert not window.print_server.running
+
+
+def test_about_shows_legal_notices(window, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QMessageBox
+
+    seen = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: seen.append((self.text(), self.textFormat())) or 0)
+    window.about()
+    text, fmt = seen[0]
+    assert fmt == Qt.TextFormat.PlainText
+    for needle in ("Copyright", "Artifex", "Qt Company", "Affero", "LICENSES", "github.com/whitewater-png/Leafweaving"):
+        assert needle in text, needle
 
 
 def test_toolbar_has_buttons_for_every_feature(window):
@@ -180,7 +213,7 @@ def _drag(view, app, scene_from, scene_to):
 
 
 def test_drag_moves_existing_text(window, app):
-    from leafwright.core import text_edit
+    from leafweaving.core import text_edit
 
     window._set_tool(Tool.SELECT)
     page = window.pdf.page(0)
@@ -206,7 +239,7 @@ def test_drag_moves_shape_annotation(window, app):
 
 
 def test_drag_moves_content_drawing(window, app):
-    from leafwright.core import shapes
+    from leafweaving.core import shapes
 
     page = window.pdf.page(0)
     page.draw_rect(pymupdf.Rect(100, 400, 200, 460), color=(1, 0, 0), fill=(0.9, 0.9, 0))
@@ -280,14 +313,14 @@ def test_split_view_shows_two_documents(window, app, tmp_path):
 
 
 def test_logo_renders(app):
-    from leafwright.ui.logo import draw_logo
+    from leafweaving.ui.logo import draw_logo
 
     pm = draw_logo(128)
     assert pm.width() == 128 and not pm.toImage().pixelColor(64, 64).alpha() == 0
 
 
 def test_split_right_pane_is_editable(window, app, tmp_path):
-    from leafwright.core import text_edit
+    from leafweaving.core import text_edit
 
     other = tmp_path / "second.pdf"
     d = pymupdf.open()
@@ -326,7 +359,7 @@ def test_split_right_pane_is_editable(window, app, tmp_path):
 
 
 def test_move_snaps_to_other_object_edges(window, app):
-    from leafwright.core import text_edit
+    from leafweaving.core import text_edit
 
     page = window.pdf.page(0)
     spans = text_edit.get_spans(page)
@@ -355,8 +388,8 @@ def test_move_snaps_to_other_object_edges(window, app):
 
 
 def test_update_dialog_and_menu(window, app, monkeypatch):
-    from leafwright.core import updater
-    from leafwright.ui import main_window as mw
+    from leafweaving.core import updater
+    from leafweaving.ui import main_window as mw
 
     rel = updater.parse_release({"tag_name": "v9.0.0", "body": "changes", "html_url": "https://x",
                                  "assets": []})
@@ -384,7 +417,7 @@ def test_update_dialog_and_menu(window, app, monkeypatch):
 
 def _multi_page(window, app):
     """Replace page 1 content with three known text lines + one drawn rectangle."""
-    from leafwright.core import text_edit
+    from leafweaving.core import text_edit
 
     page = window.pdf.page(0)
     for i, label in enumerate(("alpha", "bravo", "charlie")):
@@ -424,7 +457,7 @@ def test_shift_click_builds_multi_selection(window, app):
 
 
 def test_rubber_band_selects_and_group_moves_as_one_undo(window, app):
-    from leafwright.core import text_edit
+    from leafweaving.core import text_edit
 
     spans = _multi_page(window, app)
     window.snap_check.setChecked(False)
@@ -442,7 +475,7 @@ def test_rubber_band_selects_and_group_moves_as_one_undo(window, app):
     assert abs(now["alpha"].bbox.x0 - spans["alpha"].bbox.x0 - 50 / z) < 1.5
     assert abs(now["bravo"].bbox.y0 - spans["bravo"].bbox.y0 - 40 / z) < 1.5
     assert abs(now["charlie"].bbox.x0 - spans["charlie"].bbox.x0) < 0.5     # untouched
-    rects = [d.rect for d in __import__("leafwright.core.shapes", fromlist=["x"]).list_drawings(window.pdf.page(0))]
+    rects = [d.rect for d in __import__("leafweaving.core.shapes", fromlist=["x"]).list_drawings(window.pdf.page(0))]
     assert any(abs(r.x0 - (300 + 50 / z)) < 1.5 for r in rects)
     window.undo()
     back = {s.text: s for s in text_edit.get_spans(window.pdf.page(0))}
@@ -450,7 +483,7 @@ def test_rubber_band_selects_and_group_moves_as_one_undo(window, app):
 
 
 def test_bulk_text_edit_changes_all_selected(window, app):
-    from leafwright.core import multi, text_edit
+    from leafweaving.core import multi, text_edit
 
     spans = _multi_page(window, app)
     chosen = [spans["alpha"], spans["bravo"]]
@@ -464,7 +497,7 @@ def test_bulk_text_edit_changes_all_selected(window, app):
 
 
 def test_delete_key_removes_whole_selection(window, app):
-    from leafwright.core import text_edit
+    from leafweaving.core import text_edit
 
     spans = _multi_page(window, app)
     window.snap_check.setChecked(False)
@@ -477,8 +510,8 @@ def test_delete_key_removes_whole_selection(window, app):
 
 
 def test_text_dialog_keeps_original_font_by_default(app):
-    from leafwright.core.fonts import FontRegistry
-    from leafwright.ui.dialogs import TextDialog
+    from leafweaving.core.fonts import FontRegistry
+    from leafweaving.ui.dialogs import TextDialog
 
     reg = FontRegistry(scan=False, use_cache=False)
     dlg = TextDialog(reg, "abc", "Helvetica", "IPAPGothic", 12, (0, 0, 0), editing=True)
@@ -491,7 +524,7 @@ def test_text_dialog_keeps_original_font_by_default(app):
 
 
 def test_redact_tool_and_redact_selection(window, app):
-    from leafwright.core import redact
+    from leafweaving.core import redact
 
     window._set_tool(Tool.REDACT)
     view = window.view

@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "leafwright"
-version = "0.5.0"
+name = "leafweaving"
+version = "0.6.0"
 description = "Lightweight cross-platform GUI PDF editor (text, shapes, pages, PDF/A & PDF/X export)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Leafwright contributors" }]
+authors = [{ name = "Leafweaving contributors" }]
 dependencies = [
     "PyMuPDF>=1.24",
     "pikepdf>=8.0",
@@ -17,17 +17,22 @@ dependencies = [
     "certifi",
 ]
 
+[project.urls]
+Homepage = "https://github.com/whitewater-png/Leafweaving"
+Source = "https://github.com/whitewater-png/Leafweaving"
+Releases = "https://github.com/whitewater-png/Leafweaving/releases"
+
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 
 [project.scripts]
-leafwright = "leafwright.app:main"
+leafweaving = "leafweaving.app:main"
 
 [project.gui-scripts]
-leafwright-gui = "leafwright.app:main"
+leafweaving-gui = "leafweaving.app:main"
 
 [tool.setuptools.packages.find]
-include = ["leafwright*"]
+include = ["leafweaving*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

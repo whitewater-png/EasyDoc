@@ -5,10 +5,10 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from leafwright.core import multi, text_edit
-from leafwright.core.document import PdfDocument
-from leafwright.core.embedded_fonts import PageFontIndex, drawn_strings, parse_tounicode
-from leafwright.core.fonts import FontRegistry
+from leafweaving.core import multi, text_edit
+from leafweaving.core.document import PdfDocument
+from leafweaving.core.embedded_fonts import PageFontIndex, drawn_strings, parse_tounicode
+from leafweaving.core.fonts import FontRegistry
 
 CJK_FAMILY = "Droid Sans Fallback Regular"
 

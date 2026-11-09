@@ -1,8 +1,8 @@
 import pymupdf
 
-from leafwright.core import shapes, text_edit
-from leafwright.core.document import PdfDocument
-from leafwright.core.fonts import FontRegistry
+from leafweaving.core import shapes, text_edit
+from leafweaving.core.document import PdfDocument
+from leafweaving.core.fonts import FontRegistry
 
 
 def test_spans_and_replace(sample_pdf):
@@ -84,8 +84,8 @@ def test_delete_content_drawing(sample_pdf):
 
 def test_repeated_annot_moves_do_not_distort():
     import pymupdf
-    from leafwright.core import shapes
-    from leafwright.core.document import PdfDocument
+    from leafweaving.core import shapes
+    from leafweaving.core.document import PdfDocument
 
     pdf = PdfDocument.new()
     xref = shapes.add_shape(pdf, 0, "rect", pymupdf.Point(100, 100), pymupdf.Point(200, 160),

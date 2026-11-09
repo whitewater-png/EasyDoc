@@ -9,17 +9,17 @@ import pymupdf
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("LEAFWRIGHT_LANG", "en")
+os.environ.setdefault("LEAFWEAVING_LANG", "en")
 
-from leafwright.core import printserver, standards  # noqa: E402
-from leafwright.core.document import PdfDocument  # noqa: E402
+from leafweaving.core import printserver, standards  # noqa: E402
+from leafweaving.core.document import PdfDocument  # noqa: E402
 
 
 def test_print_document_to_pdf_printer(sample_pdf, tmp_path):
     QtWidgets = pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtPrintSupport import QPrinter
 
-    from leafwright.ui import printing
+    from leafweaving.ui import printing
 
     QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     pdf = PdfDocument.open(sample_pdf)
@@ -80,17 +80,21 @@ def test_server_receives_pdf(sample_pdf, tmp_path, monkeypatch):
     assert not srv.running
 
 
-def test_server_rejects_garbage(tmp_path, monkeypatch):
+def test_server_rejects_garbage_silently(tmp_path, monkeypatch):
+    """Not a document: dropped with neither a document nor an error dialog
+    (a web page can send such data; it must not be able to raise dialogs)."""
     srv, results, errors, done = _server(tmp_path, monkeypatch)
     try:
         _send(srv.port, b"this is not a document at all")
-        assert done.wait(10)
-        assert errors and not results
+        assert not done.wait(1.5)
+        assert not errors and not results
+        assert not list(tmp_path.iterdir())
     finally:
         srv.stop()
 
 
-@pytest.mark.skipif(standards.find_ghostscript() is None, reason="Ghostscript not installed")
+@pytest.mark.skipif(standards.ghostscript_for_untrusted_input() is None,
+                    reason="Ghostscript without known security bugs (see standards.GS_WITHOUT_KNOWN_BUGS) not installed")
 def test_server_converts_postscript(sample_pdf, tmp_path, monkeypatch):
     gs = standards.find_ghostscript()
     ps = tmp_path / "job.ps"

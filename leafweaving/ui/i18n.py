@@ -1,0 +1,271 @@
+"""Tiny translation table (Japanese / English) selected from the system locale."""
+from __future__ import annotations
+
+import locale
+import os
+
+_STRINGS: dict[str, tuple[str, str]] = {
+    # key: (en, ja)
+    "app.title": ("Leafweaving", "Leafweaving"),
+    "menu.file": ("&File", "ファイル(&F)"),
+    "menu.edit": ("&Edit", "編集(&E)"),
+    "menu.page": ("&Page", "ページ(&P)"),
+    "menu.view": ("&View", "表示(&V)"),
+    "menu.tools": ("&Tools", "ツール(&T)"),
+    "menu.help": ("&Help", "ヘルプ(&H)"),
+    "act.new": ("&New", "新規作成(&N)"),
+    "act.split_view": ("Split &View (side by side)", "スプリット表示(左右に並べる)(&V)"),
+    "act.split_view_close": ("Close split view", "スプリット表示を閉じる"),
+    "lbl.snap": ("Snap to guides", "ガイドにスナップ"),
+    "tip.snap": ("While moving, align edges to other text/shapes and show guide lines",
+                 "移動中、他の文字・図形の端にガイドを表示して吸着します"),
+    "act.check_update": ("Check for &Updates…", "アップデートを確認(&U)…"),
+    "act.auto_update": ("Check for updates at startup", "起動時にアップデートを確認"),
+    "dlg.update": ("Update available", "アップデートがあります"),
+    "msg.update_available": ("Leafweaving {0} is available (you have {1}).", "Leafweaving {0} が公開されています(現在 {1})。"),
+    "msg.update_none": ("You are using the latest version ({0}).", "最新バージョン({0})をお使いです。"),
+    "msg.update_failed": ("Could not check for updates:\n{0}", "アップデートを確認できませんでした:\n{0}"),
+    "btn.update_download": ("Download && open", "ダウンロードして開く"),
+    "btn.update_page": ("Release page", "リリースページ"),
+    "btn.update_skip": ("Skip this version", "このバージョンをスキップ"),
+    "btn.update_later": ("Later", "あとで"),
+    "msg.update_noasset": ("No package for this OS was found in the release; opening the release page.",
+                           "このOS向けのパッケージが見つからないため、リリースページを開きます。"),
+    "msg.update_downloading": ("Downloading {0}…", "{0} をダウンロード中…"),
+    "msg.update_done": ("Downloaded to {0}.\nQuit Leafweaving and install it (macOS: drag the app to Applications; Windows/Linux: extract and replace the old folder).",
+                        "{0} にダウンロードしました。\nLeafweaving を終了してから入れ替えてください(macOS: アプリをアプリケーションへドラッグ / Windows・Linux: 展開して旧フォルダと置き換え)。"),
+    "act.edit_sel": ("Edit Selected Text…", "選択したテキストを編集…"),
+    "act.redact_sel": ("Redact Selection", "選択範囲を墨塗り"),
+    "act.select_all": ("Select All on Page", "ページ内をすべて選択"),
+    "dlg.bulk_text": ("Edit Multiple Texts", "テキストをまとめて変更"),
+    "dlg.bulk_count": ("{0} text items selected. Only ticked properties are changed.",
+                       "{0} 個のテキストを選択中。チェックした項目だけを変更します。"),
+    "dlg.find": ("Find", "検索する文字"),
+    "dlg.replace": ("Replace with", "置換後の文字"),
+    "dlg.change": ("Change", "変更"),
+    "msg.bulk_nothing": ("Nothing to change.", "変更する項目がありません。"),
+    "tip.select_multi": ("Click text to edit · Shift+click or drag a box to select several · drag to move",
+                         "クリックで編集 · Shift+クリック／ドラッグで範囲選択 · ドラッグで移動"),
+    "act.close_tab": ("Close &Tab", "タブを閉じる(&T)"),
+    "act.open": ("&Open…", "開く(&O)…"),
+    "act.save": ("&Save", "上書き保存(&S)"),
+    "act.saveas": ("Save &As / Export…", "名前を付けて保存 / 規格書き出し(&A)…"),
+    "act.merge": ("&Merge PDFs into this document…", "PDFを結合(&M)…"),
+    "act.quit": ("&Quit", "終了(&Q)"),
+    "act.undo": ("&Undo", "元に戻す(&U)"),
+    "act.redo": ("&Redo", "やり直す(&R)"),
+    "act.delete_sel": ("&Delete selected shape", "選択図形を削除(&D)"),
+    "act.rot_left": ("Rotate &Left", "左に回転(&L)"),
+    "act.rot_right": ("Rotate &Right", "右に回転(&R)"),
+    "act.del_page": ("&Delete page", "ページを削除(&D)"),
+    "act.insert_page": ("&Insert blank page…", "空白ページを挿入(&I)…"),
+    "act.move_up": ("Move page &up", "ページを前へ(&U)"),
+    "act.move_down": ("Move page d&own", "ページを後ろへ(&O)"),
+    "act.extract": ("&Extract pages…", "ページを抽出(&E)…"),
+    "act.split": ("&Split document…", "ドキュメントを分割(&S)…"),
+    "act.zoom_in": ("Zoom &in", "拡大(&I)"),
+    "act.zoom_out": ("Zoom &out", "縮小(&O)"),
+    "act.zoom_fit": ("Fit &width", "幅に合わせる(&W)"),
+    "act.zoom_100": ("&Actual size", "実寸(&A)"),
+    "act.about": ("&About", "バージョン情報(&A)"),
+    "act.add_font": ("Add font &file…", "フォントファイルを追加(&F)…"),
+    "tool.select": ("Select", "選択"),
+    "tool.text": ("Text", "テキスト"),
+    "tool.rect": ("Rectangle", "四角形"),
+    "tool.ellipse": ("Ellipse", "楕円"),
+    "tool.line": ("Line", "直線"),
+    "tool.arrow": ("Arrow", "矢印"),
+    "tool.erase": ("Erase drawing", "図形を消去"),
+    "tool.redact": ("Redact", "墨塗り"),
+    "lbl.redact_crossing": ("Redact: also remove crossing shapes", "墨塗り: またぐ図形も消す"),
+    "tip.redact_crossing": (
+        "Off (default): shapes crossing the edge of a redacted area (backgrounds, table lines…) are kept, "
+        "hidden under the black box and locked; the hidden part still exists in the file.\n"
+        "On: they are deleted whole so none of their data remains (e.g. a vector signature). "
+        "Side effects OUTSIDE the area: page backgrounds, table frames and nearby thick lines disappear, "
+        "and content hidden under a white rectangle can become visible. Check the page afterwards.",
+        "オフ(既定): 墨塗り範囲の縁をまたぐ図形(背景・罫線など)は残し、黒い箱の下に隠してロックします。"
+        "隠れた部分のデータはファイルに残ります。\n"
+        "オン: またぐ図形を丸ごと削除し、データを一切残しません(ベクターの署名など)。"
+        "ただし範囲の外にも影響します: ページの背景・表の枠・近くの太線が消え、白い四角で隠していた内容が"
+        "見えるようになることがあります。墨塗り後にページを確認してください。"),
+    "tip.select": ("Click text to edit it · Shift+click or drag a box to select several · drag to move · Delete removes",
+                   "クリックで編集 · Shift+クリック／範囲ドラッグで複数選択 · ドラッグで移動 · Deleteで削除"),
+    "tip.shape": ("Drag to draw", "ドラッグして描画"),
+    "tip.erase": ("Click an existing vector drawing to remove it", "既存のベクター図形をクリックで消去"),
+    "tip.redact": ("Drag over an area to redact it: text, images and shapes inside are permanently removed (Ctrl+Z undoes until you save)",
+                   "ドラッグした範囲を墨塗り: 中の文字・画像・図形は完全に削除されます(保存前なら Ctrl+Z で戻せます)"),
+    "lbl.stroke": ("Stroke", "線色"),
+    "lbl.fill": ("Fill", "塗り"),
+    "lbl.width": ("Width", "線幅"),
+    "lbl.font": ("Font", "フォント"),
+    "lbl.size": ("Size", "サイズ"),
+    "lbl.none": ("none", "なし"),
+    "lbl.pages": ("Pages", "ページ"),
+    "lbl.page_of": ("Page {0} / {1}", "{0} / {1} ページ"),
+    "lbl.zoom": ("Zoom {0}%", "ズーム {0}%"),
+    "lbl.ranges_help": ("e.g. 1-3,5,8-", "例: 1-3,5,8-"),
+    "dlg.edit_text": ("Edit text", "テキストを編集"),
+    "dlg.new_text": ("New text", "新しいテキスト"),
+    "dlg.text": ("Text", "テキスト"),
+    "dlg.color": ("Color", "色"),
+    "dlg.delete_text": ("Delete this text", "このテキストを削除"),
+    "dlg.original_font": ("Original font: {0}", "元のフォント: {0}"),
+    "dlg.keep_font": ("Keep the original font (closest installed font for missing characters)",
+                      "元のフォントを維持（無い文字があるときは近いフォント）"),
+    "dlg.saveas": ("Save As / Export", "名前を付けて保存 / 規格書き出し"),
+    "dlg.standard": ("Standard", "規格"),
+    "dlg.version": ("PDF version", "PDFバージョン"),
+    "dlg.keep": ("keep current", "現在のまま"),
+    "dlg.linearize": ("Optimize for fast web view (linearize)", "Web表示用に最適化(リニアライズ)"),
+    "dlg.compress": ("Compress streams & remove unused objects", "ストリーム圧縮・不要オブジェクト削除"),
+    "dlg.gs_found": ("Ghostscript found: {0} — full PDF/A & PDF/X conversion available",
+                     "Ghostscript検出: {0} — PDF/A・PDF/X の完全変換が可能"),
+    "dlg.gs_outdated": ("Ghostscript {0} (version {1}) has known security bugs: please update to {2} or newer. "
+                        "Until then it is only used after you confirm that the document is trusted",
+                        "Ghostscript {0} (バージョン {1}) には既知のセキュリティ上の欠陥があります。{2} 以降に"
+                        "更新してください。それまでは、文書を信頼できると確認した場合にだけ使います"),
+    "msg.gs_outdated_ask": ("Ghostscript {0} has publicly known security bugs. A malicious PDF could exploit them "
+                            "during this conversion.\n\nDo you trust this document and want to convert it with "
+                            "Ghostscript anyway?\n\nNo: a best-effort file is written without Ghostscript.",
+                            "Ghostscript {0} には公開済みのセキュリティ上の欠陥があります。悪意ある PDF なら、"
+                            "この変換中にそれを突ける可能性があります。\n\nこの文書を信頼して、Ghostscript で"
+                            "変換しますか？\n\n「いいえ」の場合は Ghostscript を使わずベストエフォートで保存します。"),
+    "dlg.gs_old": ("Ghostscript {0} (version {1}) is too old to be used safely — PDF/A & PDF/X will be best-effort only",
+                   "Ghostscript {0} (バージョン {1}) は古すぎて安全に使えません — PDF/A・PDF/X はベストエフォートになります"),
+    "dlg.gs_missing": ("Ghostscript not found — PDF/A & PDF/X will be best-effort only (not guaranteed to validate)",
+                       "Ghostscript未検出 — PDF/A・PDF/X はベストエフォート(検証合格は保証されません)"),
+    "dlg.title_meta": ("Title", "タイトル"),
+    "dlg.author_meta": ("Author", "作成者"),
+    "dlg.split": ("Split document", "ドキュメントを分割"),
+    "dlg.split_every": ("Every N pages:", "N ページごと:"),
+    "dlg.split_ranges": ("By ranges (one per line):", "範囲指定(1行に1ファイル):"),
+    "dlg.out_dir": ("Output folder", "出力フォルダ"),
+    "dlg.prefix": ("File prefix", "ファイル名の接頭辞"),
+    "dlg.browse": ("Browse…", "参照…"),
+    "dlg.extract": ("Extract pages", "ページを抽出"),
+    "dlg.extract_ranges": ("Pages to extract:", "抽出するページ:"),
+    "dlg.merge": ("Merge PDFs", "PDFを結合"),
+    "dlg.add_files": ("Add files…", "ファイルを追加…"),
+    "dlg.remove": ("Remove", "削除"),
+    "dlg.up": ("Up", "上へ"),
+    "dlg.down": ("Down", "下へ"),
+    "dlg.insert_at": ("Insert after page (0 = at start, blank = at end):",
+                      "挿入位置(この番号のページの後。0=先頭、空欄=末尾):"),
+    "dlg.insert_page": ("Insert blank page", "空白ページを挿入"),
+    "dlg.page_size": ("Page size", "用紙サイズ"),
+    "dlg.position": ("Position", "挿入位置"),
+    "dlg.before_current": ("Before current page", "現在のページの前"),
+    "dlg.after_current": ("After current page", "現在のページの後"),
+    "msg.saved": ("Saved to {0} ({1})", "{0} に保存しました ({1})"),
+    "msg.saved_warn": ("Saved with warnings", "警告付きで保存しました"),
+    "msg.unsaved": ("The document has unsaved changes. Save them?", "未保存の変更があります。保存しますか?"),
+    "msg.error": ("Error", "エラー"),
+    "msg.open_failed": ("Could not open file:\n{0}", "ファイルを開けません:\n{0}"),
+    "msg.split_done": ("Wrote {0} files to {1}", "{1} に {0} ファイルを書き出しました"),
+    "msg.extract_done": ("Extracted {0} pages to {1}", "{0} ページを {1} に抽出しました"),
+    "msg.merge_done": ("Added {0} pages", "{0} ページを追加しました"),
+    "msg.need_doc": ("Open or create a document first", "先にドキュメントを開くか作成してください"),
+    "msg.about": ("Leafweaving {0}\nLightweight cross-platform PDF editor.\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}\n\n"
+                  "Copyright (C) 2026 Leafweaving contributors (MIT License).\n"
+                  "MuPDF and PyMuPDF: Copyright (C) Artifex Software, Inc. (GNU AGPL v3).\n"
+                  "Qt and Qt for Python: Copyright (C) The Qt Company Ltd. and other contributors (GNU LGPL v3).\n"
+                  "pikepdf: Copyright (C) James R. Barlow (MPL-2.0); qpdf: Copyright (C) Jay Berkenbilt and "
+                  "Manfred Holger (Apache-2.0).\n\n"
+                  "This program as distributed includes MuPDF and is therefore provided to you under the GNU "
+                  "Affero General Public License version 3: you may redistribute and modify it under that "
+                  "license. It comes with ABSOLUTELY NO WARRANTY.\n"
+                  "License texts and all third-party notices: the LICENSES folder of this package. "
+                  "Source code: https://github.com/whitewater-png/Leafweaving",
+                  "Leafweaving {0}\n軽量クロスプラットフォームPDFエディタ\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}\n\n"
+                  "Copyright (C) 2026 Leafweaving contributors (MIT License)\n"
+                  "MuPDF・PyMuPDF: Copyright (C) Artifex Software, Inc.(GNU AGPL v3)\n"
+                  "Qt・Qt for Python: Copyright (C) The Qt Company Ltd. and other contributors(GNU LGPL v3)\n"
+                  "pikepdf: Copyright (C) James R. Barlow(MPL-2.0)／qpdf: Copyright (C) Jay Berkenbilt and "
+                  "Manfred Holger(Apache-2.0)\n\n"
+                  "配布しているこのプログラムは MuPDF を含むため、全体として GNU Affero General Public License "
+                  "version 3 で提供されます。同ライセンスの条件で再配布・改変できます。本プログラムは無保証です。\n"
+                  "ライセンス文とサードパーティの表示: このパッケージの LICENSES フォルダ。"
+                  "ソースコード: https://github.com/whitewater-png/Leafweaving"),
+    "filter.pdf": ("PDF files (*.pdf);;All files (*)", "PDFファイル (*.pdf);;すべてのファイル (*)"),
+    "filter.open": ("Documents (*.pdf *.xps *.epub *.png *.jpg *.jpeg *.tiff *.svg);;All files (*)",
+                    "ドキュメント (*.pdf *.xps *.epub *.png *.jpg *.jpeg *.tiff *.svg);;すべてのファイル (*)"),
+    "filter.font": ("Fonts (*.ttf *.otf *.ttc)", "フォント (*.ttf *.otf *.ttc)"),
+    # printing
+    "act.print": ("&Print…", "印刷(&P)…"),
+    "act.vprinter": ("Receive print jobs (virtual printer)", "印刷を受け付ける(仮想プリンター)"),
+    "act.vprinter_setup": ("Set up the \"Leafweaving PDF\" printer…", "「Leafweaving PDF」プリンターを設定…"),
+    "msg.printed": ("Sent {0} pages to the printer", "{0} ページをプリンターに送信しました"),
+    "msg.print_failed": ("Printing failed:\n{0}", "印刷に失敗しました:\n{0}"),
+    "msg.vprinter_on": ("Virtual printer listening on 127.0.0.1:{0}", "仮想プリンター待受中 127.0.0.1:{0}"),
+    "msg.vprinter_off": ("Virtual printer stopped", "仮想プリンターを停止しました"),
+    "msg.vprinter_fail": ("Could not start the virtual printer on port {0}:\n{1}",
+                          "ポート {0} で仮想プリンターを開始できません:\n{1}"),
+    "msg.job_received": ("Print job received: {0}", "印刷ジョブを受信: {0}"),
+    "msg.job_confirm": ("A print job arrived ({0} pages): {1}\nOpen it?",
+                        "印刷ジョブを受信しました（{0} ページ）: {1}\n開きますか？"),
+    "msg.job_failed": ("A print job could not be converted:\n{0}", "印刷ジョブを変換できませんでした:\n{0}"),
+    "dlg.vprinter": ("Virtual printer setup", "仮想プリンターの設定"),
+    "dlg.vprinter_intro": (
+        "Print from Word, Excel, PowerPoint or any other application straight into Leafweaving.\n"
+        "Leafweaving listens on a local network port; the operating system needs a printer queue that "
+        "sends its output to that port. Create it once with the command below, then keep "
+        "\"Receive print jobs\" switched on while printing.",
+        "Word・Excel・PowerPoint など任意のアプリの「印刷」から、Leafweaving に直接 PDF を送れます。\n"
+        "Leafweaving はローカルのネットワークポートで待ち受けます。OS 側に、そのポートへ出力するプリンター"
+        "キューを 1 回だけ作成してください(下のコマンド)。印刷するときは「印刷を受け付ける」をオンにしておきます。"),
+    "dlg.vprinter_port": ("Port", "ポート"),
+    "dlg.vprinter_cmd": ("Command (run as administrator / with sudo):", "コマンド(管理者権限 / sudo で実行):"),
+    "dlg.vprinter_install": ("Create printer now", "今すぐプリンターを作成"),
+    "dlg.vprinter_remove": ("Remove printer", "プリンターを削除"),
+    "dlg.vprinter_copy": ("Copy command", "コマンドをコピー"),
+    "dlg.vprinter_status_yes": ("Printer \"{0}\" is installed.", "プリンター「{0}」は設定済みです。"),
+    "dlg.vprinter_status_no": ("Printer \"{0}\" is not installed yet.", "プリンター「{0}」は未設定です。"),
+    "dlg.vprinter_status_unknown": ("Printer status could not be determined.", "プリンターの状態を確認できませんでした。"),
+    "dlg.vprinter_note_win": (
+        "Windows: uses the built-in \"Microsoft Print To PDF\" driver on a Standard TCP/IP port. "
+        "If a job arrives as XPS or PostScript it is converted automatically (PostScript needs Ghostscript).",
+        "Windows: 標準の「Microsoft Print To PDF」ドライバーを Standard TCP/IP ポートで使用します。"
+        "XPS や PostScript で届いた場合も自動変換します(PostScript は Ghostscript が必要)。"),
+    "dlg.vprinter_note_mac": (
+        "macOS: creates a raw CUPS queue; applications send PDF directly. "
+        "(macOS can also \"Save as PDF\" from any print dialog, then open the file in Leafweaving.)",
+        "macOS: raw の CUPS キューを作成します。アプリは PDF をそのまま送ります。"
+        "(macOS の印刷ダイアログ「PDF として保存」→ Leafweaving で開く、でも同じことができます)"),
+    "dlg.vprinter_note_linux": (
+        "Linux: creates a raw CUPS queue; GTK/Qt/LibreOffice applications send PDF directly. "
+        "PostScript jobs are converted with Ghostscript.",
+        "Linux: raw の CUPS キューを作成します。GTK/Qt/LibreOffice 系アプリは PDF をそのまま送ります。"
+        "PostScript は Ghostscript で変換します。"),
+    "dlg.vprinter_result_ok": ("Printer created.", "プリンターを作成しました。"),
+    "dlg.vprinter_result_fail": ("Command failed:\n{0}", "コマンドが失敗しました:\n{0}"),
+    "grp.file": ("FILE", "ファイル"),
+    "grp.edit": ("EDIT", "編集"),
+    "grp.tools": ("TOOLS", "ツール"),
+    "grp.page": ("PAGES", "ページ"),
+    "grp.view": ("VIEW", "表示"),
+    "grp.style": ("STYLE", "スタイル"),
+    "lbl.drop_hint": ("Drop a PDF here, or use File ▸ Open", "ここに PDF をドロップ、またはファイル ▸ 開く"),
+}
+
+
+def _detect_lang() -> str:
+    forced = os.environ.get("LEAFWEAVING_LANG")
+    if forced:
+        return forced[:2].lower()
+    try:
+        from PySide6.QtCore import QLocale
+
+        name = QLocale.system().name()
+    except Exception:  # pragma: no cover
+        name = locale.getdefaultlocale()[0] or "en"
+    return "ja" if (name or "").lower().startswith("ja") else "en"
+
+
+LANG = _detect_lang()
+
+
+def tr(key: str, *args) -> str:
+    en, ja = _STRINGS.get(key, (key, key))
+    s = ja if LANG == "ja" else en
+    return s.format(*args) if args else s
