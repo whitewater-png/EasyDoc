@@ -526,26 +526,26 @@ def test_license_texts_are_collected_for_the_bundle(tmp_path):
     out = licenses.collect(tmp_path / "LICENSES")
     names = {p.name for p in out.iterdir()}
     assert {"LICENSE.txt", "NOTICE.txt", "AGPL-3.0.txt", "LGPL-3.0.txt", "GPL-3.0.txt"} <= names
-    assert "GNU AFFERO GENERAL PUBLIC LICENSE" in (out / "AGPL-3.0.txt").read_text()
-    assert "GNU LESSER GENERAL PUBLIC LICENSE" in (out / "LGPL-3.0.txt").read_text()
+    assert "GNU AFFERO GENERAL PUBLIC LICENSE" in (out / "AGPL-3.0.txt").read_text("utf-8")
+    assert "GNU LESSER GENERAL PUBLIC LICENSE" in (out / "LGPL-3.0.txt").read_text("utf-8")
     third = {p.name.split("-")[0].lower() for p in (out / "third-party").iterdir()}
     assert {"pymupdf", "pikepdf", "pyside6_essentials", "shiboken6", "certifi", "mupdf"} <= third
     assert list((out / "third-party").rglob("qpdf*"))
     mu = out / "third-party" / "MuPDF-thirdparty"
     for lib in ("freetype", "harfbuzz", "libjpeg", "openjpeg", "jbig2dec", "lcms2", "zlib", "fonts"):
         assert any((mu / lib).iterdir()), lib
-    assert "SIL OPEN FONT LICENSE" in (mu / "fonts" / "urw" / "OFL.txt").read_text()
+    assert "SIL OPEN FONT LICENSE" in (mu / "fonts" / "urw" / "OFL.txt").read_text("utf-8")
     assert (mu / "fonts" / "droid" / "NOTICE").exists()
-    assert "LGPL" in next((out / "third-party").glob("PySide6*/LICENSE-INFO.txt")).read_text()
+    assert "LGPL" in next((out / "third-party").glob("PySide6*/LICENSE-INFO.txt")).read_text("utf-8")
     qt = out / "third-party" / "Qt-thirdparty"
-    attributions = (qt / "ATTRIBUTIONS.txt").read_text()
+    attributions = (qt / "ATTRIBUTIONS.txt").read_text("utf-8")
     for comp in ("PCRE2", "double-conversion", "LibPNG", "HarfBuzz", "Freetype"):
         assert comp.lower() in attributions.lower(), comp
     assert (qt / "license-texts" / "BSD-3-Clause.txt").exists()
-    assert "Jay Berkenbilt" in (out / "third-party" / "qpdf-NOTICE.md").read_text()
+    assert "Jay Berkenbilt" in (out / "third-party" / "qpdf-NOTICE.md").read_text("utf-8")
     assert (out / "third-party" / "CPython-deps" / "OpenSSL-LICENSE.txt").exists()
-    assert "CPython 3." in (out / "third-party" / "CPython" / "VERSION.txt").read_text()
-    notice = (out / "NOTICE.txt").read_text()
+    assert "CPython 3." in (out / "third-party" / "CPython" / "VERSION.txt").read_text("utf-8")
+    notice = (out / "NOTICE.txt").read_text("utf-8")
     for holder in ("Artifex Software", "The Qt Company", "Leafweaving contributors", "Independent JPEG Group",
                    "FreeType Project", "(URW)++"):
         assert holder in notice, holder
@@ -575,16 +575,16 @@ def test_bundle_binary_allowlist_covers_known_and_flags_unknown(tmp_path, monkey
     monkeypatch.delenv("LEAFWEAVING_ALLOW_UNKNOWN_BINARIES", raising=False)
     with pytest.raises(SystemExit, match="libgtk-3"):
         build_mod._check_binaries_known(root)
-    assert "UNKNOWN" in (tmp_path / "build" / "BINARIES.txt").read_text()
+    assert "UNKNOWN" in (tmp_path / "build" / "BINARIES.txt").read_text("utf-8")
 
 
 def test_linux_runtime_package_list_is_shared_by_readme_and_workflow():
-    pkgs = [l.strip() for l in (ROOT / "packaging" / "linux-runtime-packages.txt").read_text().splitlines()
+    pkgs = [l.strip() for l in (ROOT / "packaging" / "linux-runtime-packages.txt").read_text("utf-8").splitlines()
             if l.strip() and not l.startswith("#")]
     assert "libxcb-cursor0" in pkgs and "libssl3" in pkgs and "libffi8" in pkgs
-    readme = (ROOT / "README.md").read_text()
+    readme = (ROOT / "README.md").read_text("utf-8")
     assert "sudo apt install " + " ".join(pkgs) in readme
-    wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    wf = (ROOT / ".github" / "workflows" / "release.yml").read_text("utf-8")
     assert "linux-runtime-packages.txt" in wf and "ubuntu:22.04" in wf
     assert "pattern: leafweaving-*" in wf
 

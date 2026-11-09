@@ -44,7 +44,9 @@ def test_best_effort_pdfx(sample_pdf, tmp_path):
 def test_ghostscript_pdfa(sample_pdf, tmp_path, std, expected):
     pdf = PdfDocument.open(sample_pdf)
     out = tmp_path / f"{std}.pdf"
-    res = standards.save_document(pdf, out, standards.SaveOptions(standard=std))
+    # Distribution Ghostscripts (e.g. Ubuntu's 10.02.1) are below GS_WITHOUT_KNOWN_BUGS:
+    # the user would be asked first; here the document is ours, so allow it.
+    res = standards.save_document(pdf, out, standards.SaveOptions(standard=std, allow_outdated_ghostscript=True))
     assert res.engine == "ghostscript"
     assert standards.verify_standard_claim(out) == expected
     with pikepdf.open(str(out)) as p:
@@ -56,7 +58,7 @@ def test_ghostscript_pdfa(sample_pdf, tmp_path, std, expected):
 def test_ghostscript_pdfx(sample_pdf, tmp_path):
     pdf = PdfDocument.open(sample_pdf)
     out = tmp_path / "x.pdf"
-    res = standards.save_document(pdf, out, standards.SaveOptions(standard="pdfx-3"))
+    res = standards.save_document(pdf, out, standards.SaveOptions(standard="pdfx-3", allow_outdated_ghostscript=True))
     assert res.engine == "ghostscript"
     with pikepdf.open(str(out)) as p:
         assert "/OutputIntents" in p.Root

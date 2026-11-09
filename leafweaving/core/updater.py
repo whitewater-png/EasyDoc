@@ -228,8 +228,9 @@ def download(asset: Asset, dest_dir: str | Path, progress: Optional[Callable[[in
     # crash or a dropped connection can never block later downloads.
     fd, part_name = tempfile.mkstemp(dir=dest_dir, prefix=target.name + ".", suffix=".part")
     part = Path(part_name)
+    fh = os.fdopen(fd, "wb")          # owned before the request: it must be closed before any unlink (Windows)
     try:
-        with _open(req, TIMEOUT) as resp, os.fdopen(fd, "wb") as fh:
+        with fh, _open(req, TIMEOUT) as resp:
             total = int(resp.headers.get("Content-Length") or asset.size or 0)
             while True:
                 if should_cancel and should_cancel():
