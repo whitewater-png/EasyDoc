@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QDoubleSpinBox, QFileDialog, 
                                QSizePolicy, QSplitter, QTabBar, QToolBar, QVBoxLayout, QWidget)
 
 from .. import __version__
-from ..core import multi, pages, printserver, shapes, standards, text_edit, updater
+from ..core import multi, pages, printserver, redact, shapes, standards, text_edit, updater
 from ..core.document import PdfDocument
 from ..core.fonts import FontRegistry, default_registry
 from . import printing
@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         self.pdf: Optional[PdfDocument] = None  # the document of the current tab
         self.docs: list[PdfDocument] = []       # one entry per tab, in tab order
         self.registry = registry or default_registry(scan=False)
-        self.settings = settings or QSettings("easydoc", "easydoc")
+        self.settings = settings or QSettings("leafwright", "leafwright")
         self.print_server: Optional[printserver.PrintServer] = None
 
         self.view = PageView(self)
@@ -178,6 +178,7 @@ class MainWindow(QMainWindow):
         self.act_redo = act("act.redo", self.redo, QKeySequence.Redo, icon_name="redo")
         self.act_delete_sel = act("act.delete_sel", self.delete_selected, QKeySequence.Delete)
         self.act_edit_sel = act("act.edit_sel", self.edit_selected_text, "Ctrl+Return")
+        self.act_redact_sel = act("act.redact_sel", self.redact_selected, "Ctrl+Shift+K", icon_name="redact")
         self.act_select_all = act("act.select_all", self.select_all, QKeySequence.SelectAll)
         self.act_rot_left = act("act.rot_left", lambda: self.rotate(-90), "Ctrl+[", icon_name="rot_left")
         self.act_rot_right = act("act.rot_right", lambda: self.rotate(90), "Ctrl+]", icon_name="rot_right")
@@ -205,7 +206,7 @@ class MainWindow(QMainWindow):
         for tool, key, sc in ((Tool.SELECT, "tool.select", "V"), (Tool.TEXT, "tool.text", "T"),
                               (Tool.RECT, "tool.rect", "R"), (Tool.ELLIPSE, "tool.ellipse", "E"),
                               (Tool.LINE, "tool.line", "L"), (Tool.ARROW, "tool.arrow", "A"),
-                              (Tool.ERASE, "tool.erase", "X")):
+                              (Tool.ERASE, "tool.erase", "X"), (Tool.REDACT, "tool.redact", "K")):
             a = act(key, None, sc, checkable=True, icon_name=tool.value)
             a.triggered.connect(lambda _c=False, t=tool: self._set_tool(t))
             self.tool_group.addAction(a)
@@ -218,7 +219,8 @@ class MainWindow(QMainWindow):
                   self.act_vprinter, self.act_vprinter_setup, None, self.act_merge, None, self.act_quit):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu(tr("menu.edit"))
-        for a in (self.act_undo, self.act_redo, None, self.act_select_all, self.act_edit_sel, self.act_delete_sel):
+        for a in (self.act_undo, self.act_redo, None, self.act_select_all, self.act_edit_sel, self.act_delete_sel,
+                  None, self.act_redact_sel):
             m.addSeparator() if a is None else m.addAction(a)
         m = mb.addMenu(tr("menu.page"))
         for a in (self.act_rot_left, self.act_rot_right, None, self.act_insert_page, self.act_del_page,
@@ -281,6 +283,10 @@ class MainWindow(QMainWindow):
         self.snap_check.toggled.connect(self._set_snap)
         style.addWidget(self.snap_check)
         self._set_snap(self.snap_check.isChecked())
+        # Deliberately not remembered: the risky mode must be chosen each session.
+        self.redact_crossing_check = QCheckBox(tr("lbl.redact_crossing"))
+        self.redact_crossing_check.setToolTip(tr("tip.redact_crossing"))
+        style.addWidget(self.redact_crossing_check)
         style.addSeparator()
         style.addWidget(QLabel(tr("lbl.stroke")))
         self.stroke_btn = ColorButton((0.86, 0.12, 0.12))
@@ -323,7 +329,8 @@ class MainWindow(QMainWindow):
         self.view.set_tool(tool)
         self.split_pane.view.set_tool(tool)
         self.tool_actions[tool].setChecked(True)
-        tip = {Tool.SELECT: "tip.select", Tool.TEXT: "tip.text", Tool.ERASE: "tip.erase"}.get(tool, "tip.shape")
+        tip = {Tool.SELECT: "tip.select", Tool.TEXT: "tip.text", Tool.ERASE: "tip.erase",
+               Tool.REDACT: "tip.redact"}.get(tool, "tip.shape")
         self.statusBar().showMessage(tr(tip))
 
     def _update_state(self) -> None:
@@ -389,6 +396,7 @@ class MainWindow(QMainWindow):
     def _update_selection_actions(self) -> None:
         view = self._target_view()
         self.act_delete_sel.setEnabled(view.has_selection())
+        self.act_redact_sel.setEnabled(view.has_selection())
         self.act_edit_sel.setEnabled(bool(view.selected_spans()))
         self.act_select_all.setEnabled(view.pdf is not None and view.pdf.page_count > 0)
 
@@ -686,6 +694,19 @@ class MainWindow(QMainWindow):
     def select_all(self) -> None:
         self._target_view().select_all()
 
+    def redact_selected(self) -> None:
+        """Redact the area of every selected object (text, drawings, annotations)."""
+        view = self._target_view()
+        items = view.selected_items()
+        if not view.pdf or not items:
+            return
+        try:
+            redact.redact(view.pdf, view.pno, remove_crossing=self.redact_crossing_check.isChecked(),
+                          rects=[text_edit.redact_box(i.rect) if i.kind == "span" else i.rect
+                                               for i in items])
+        except Exception as exc:  # noqa: BLE001
+            self._error(exc)
+
     def delete_selected(self) -> None:
         view = self._target_view()
         items = view.selected_items()
@@ -748,6 +769,10 @@ class MainWindow(QMainWindow):
 
     def _shape_drawn(self, kind: str, p1: pymupdf.Point, p2: pymupdf.Point, view: PageView) -> None:
         try:
+            if kind == Tool.REDACT.value:
+                redact.redact(view.pdf, view.pno, [pymupdf.Rect(p1, p2)],
+                              remove_crossing=self.redact_crossing_check.isChecked())
+                return
             shapes.add_shape(view.pdf, view.pno, kind, p1, p2, self._style())
         except Exception as exc:  # noqa: BLE001
             self._error(exc)

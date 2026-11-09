@@ -1,8 +1,8 @@
 import pikepdf
 import pytest
 
-from easydoc.core import standards
-from easydoc.core.document import PdfDocument
+from leafwright.core import standards
+from leafwright.core.document import PdfDocument
 
 
 def test_plain_and_version(sample_pdf, tmp_path):

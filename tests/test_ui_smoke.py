@@ -5,16 +5,16 @@ import pymupdf
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("EASYDOC_LANG", "en")
+os.environ.setdefault("LEAFWRIGHT_LANG", "en")
 
 QtWidgets = pytest.importorskip("PySide6.QtWidgets")
 from PySide6.QtCore import QPoint, QPointF, Qt  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 
-from easydoc.core.document import PdfDocument  # noqa: E402
-from easydoc.core.fonts import FontRegistry  # noqa: E402
-from easydoc.ui.main_window import MainWindow  # noqa: E402
-from easydoc.ui.page_view import Tool  # noqa: E402
+from leafwright.core.document import PdfDocument  # noqa: E402
+from leafwright.core.fonts import FontRegistry  # noqa: E402
+from leafwright.ui.main_window import MainWindow  # noqa: E402
+from leafwright.ui.page_view import Tool  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +116,7 @@ def test_new_document(app, tmp_path):
 
 def test_edit_text_then_save_roundtrip(window, app, tmp_path):
     """Edit a span through the window, overwrite-save, reopen from disk."""
-    from easydoc.core import text_edit
+    from leafwright.core import text_edit
 
     path = window.pdf.path
     span = text_edit.get_spans(window.pdf.page(0))[0]
@@ -135,7 +135,7 @@ def test_virtual_printer_toggle_and_job(window, app, tmp_path, monkeypatch, samp
     import socket
     import time
 
-    from easydoc.core import printserver
+    from leafwright.core import printserver
 
     monkeypatch.setattr(printserver, "inbox_dir", lambda: tmp_path)
     window.settings.setValue("vprinter/port", 0)  # ephemeral port
@@ -180,7 +180,7 @@ def _drag(view, app, scene_from, scene_to):
 
 
 def test_drag_moves_existing_text(window, app):
-    from easydoc.core import text_edit
+    from leafwright.core import text_edit
 
     window._set_tool(Tool.SELECT)
     page = window.pdf.page(0)
@@ -206,7 +206,7 @@ def test_drag_moves_shape_annotation(window, app):
 
 
 def test_drag_moves_content_drawing(window, app):
-    from easydoc.core import shapes
+    from leafwright.core import shapes
 
     page = window.pdf.page(0)
     page.draw_rect(pymupdf.Rect(100, 400, 200, 460), color=(1, 0, 0), fill=(0.9, 0.9, 0))
@@ -280,14 +280,14 @@ def test_split_view_shows_two_documents(window, app, tmp_path):
 
 
 def test_logo_renders(app):
-    from easydoc.ui.logo import draw_logo
+    from leafwright.ui.logo import draw_logo
 
     pm = draw_logo(128)
     assert pm.width() == 128 and not pm.toImage().pixelColor(64, 64).alpha() == 0
 
 
 def test_split_right_pane_is_editable(window, app, tmp_path):
-    from easydoc.core import text_edit
+    from leafwright.core import text_edit
 
     other = tmp_path / "second.pdf"
     d = pymupdf.open()
@@ -326,7 +326,7 @@ def test_split_right_pane_is_editable(window, app, tmp_path):
 
 
 def test_move_snaps_to_other_object_edges(window, app):
-    from easydoc.core import text_edit
+    from leafwright.core import text_edit
 
     page = window.pdf.page(0)
     spans = text_edit.get_spans(page)
@@ -355,8 +355,8 @@ def test_move_snaps_to_other_object_edges(window, app):
 
 
 def test_update_dialog_and_menu(window, app, monkeypatch):
-    from easydoc.core import updater
-    from easydoc.ui import main_window as mw
+    from leafwright.core import updater
+    from leafwright.ui import main_window as mw
 
     rel = updater.parse_release({"tag_name": "v9.0.0", "body": "changes", "html_url": "https://x",
                                  "assets": []})
@@ -384,7 +384,7 @@ def test_update_dialog_and_menu(window, app, monkeypatch):
 
 def _multi_page(window, app):
     """Replace page 1 content with three known text lines + one drawn rectangle."""
-    from easydoc.core import text_edit
+    from leafwright.core import text_edit
 
     page = window.pdf.page(0)
     for i, label in enumerate(("alpha", "bravo", "charlie")):
@@ -424,7 +424,7 @@ def test_shift_click_builds_multi_selection(window, app):
 
 
 def test_rubber_band_selects_and_group_moves_as_one_undo(window, app):
-    from easydoc.core import text_edit
+    from leafwright.core import text_edit
 
     spans = _multi_page(window, app)
     window.snap_check.setChecked(False)
@@ -442,7 +442,7 @@ def test_rubber_band_selects_and_group_moves_as_one_undo(window, app):
     assert abs(now["alpha"].bbox.x0 - spans["alpha"].bbox.x0 - 50 / z) < 1.5
     assert abs(now["bravo"].bbox.y0 - spans["bravo"].bbox.y0 - 40 / z) < 1.5
     assert abs(now["charlie"].bbox.x0 - spans["charlie"].bbox.x0) < 0.5     # untouched
-    rects = [d.rect for d in __import__("easydoc.core.shapes", fromlist=["x"]).list_drawings(window.pdf.page(0))]
+    rects = [d.rect for d in __import__("leafwright.core.shapes", fromlist=["x"]).list_drawings(window.pdf.page(0))]
     assert any(abs(r.x0 - (300 + 50 / z)) < 1.5 for r in rects)
     window.undo()
     back = {s.text: s for s in text_edit.get_spans(window.pdf.page(0))}
@@ -450,7 +450,7 @@ def test_rubber_band_selects_and_group_moves_as_one_undo(window, app):
 
 
 def test_bulk_text_edit_changes_all_selected(window, app):
-    from easydoc.core import multi, text_edit
+    from leafwright.core import multi, text_edit
 
     spans = _multi_page(window, app)
     chosen = [spans["alpha"], spans["bravo"]]
@@ -464,7 +464,7 @@ def test_bulk_text_edit_changes_all_selected(window, app):
 
 
 def test_delete_key_removes_whole_selection(window, app):
-    from easydoc.core import text_edit
+    from leafwright.core import text_edit
 
     spans = _multi_page(window, app)
     window.snap_check.setChecked(False)
@@ -477,8 +477,8 @@ def test_delete_key_removes_whole_selection(window, app):
 
 
 def test_text_dialog_keeps_original_font_by_default(app):
-    from easydoc.core.fonts import FontRegistry
-    from easydoc.ui.dialogs import TextDialog
+    from leafwright.core.fonts import FontRegistry
+    from leafwright.ui.dialogs import TextDialog
 
     reg = FontRegistry(scan=False, use_cache=False)
     dlg = TextDialog(reg, "abc", "Helvetica", "IPAPGothic", 12, (0, 0, 0), editing=True)
@@ -488,3 +488,44 @@ def test_text_dialog_keeps_original_font_by_default(app):
     assert dlg.font_combo.isEnabled() and dlg.result_font().name == "Helvetica"
     new = TextDialog(reg, "", "Helvetica", None, 12, (0, 0, 0), editing=False)
     assert new.keep_chk is None and new.result_font().name == "Helvetica"
+
+
+def test_redact_tool_and_redact_selection(window, app):
+    from leafwright.core import redact
+
+    window._set_tool(Tool.REDACT)
+    view = window.view
+    vp = view.viewport()
+    z = view.zoom
+    p1 = view.mapFromScene(QPointF(60 * z, 80 * z))
+    p2 = view.mapFromScene(QPointF(260 * z, 108 * z))
+    QTest.mousePress(vp, Qt.LeftButton, Qt.NoModifier, p1)
+    QTest.mouseMove(vp, p2)
+    QTest.mouseRelease(vp, Qt.LeftButton, Qt.NoModifier, p2)
+    app.processEvents()
+    page = window.pdf.page(0)
+    assert "Hello" not in page.get_text()
+    assert len(redact.marks(page)) == 1
+
+    # Select-all must not pick up the black box; redacting the selection removes the rest.
+    window._set_tool(Tool.SELECT)
+    window.view.select_all()
+    assert all(not redact.is_redacted(window.pdf.page(0), i.rect) for i in window.view.selected_items())
+    window.redact_selected()
+    app.processEvents()
+    assert "Second line" not in window.pdf.page(0).get_text()
+    window.pdf.undo()
+    assert "Second line" in window.pdf.page(0).get_text()
+
+
+def test_redact_crossing_option(window, app):
+    assert not window.redact_crossing_check.isChecked()          # never remembered: off at start
+    page = window.pdf.page(0)
+    s = page.new_shape()
+    s.draw_bezier((60, 400), (90, 340), (120, 460), (200, 395))
+    s.finish(color=(0, 0, 1), width=2)
+    s.commit()
+    window.redact_crossing_check.setChecked(True)
+    window._shape_drawn("redact", pymupdf.Point(110, 370), pymupdf.Point(170, 430), window.view)
+    app.processEvents()
+    assert [d for d in window.pdf.page(0).get_drawings() if d.get("color") == (0.0, 0.0, 1.0)] == []

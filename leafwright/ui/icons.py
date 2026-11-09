@@ -138,6 +138,14 @@ def icon(name: str) -> QIcon:
         p.restore()
         p.setPen(_pen(SOFT, 4))
         p.drawLine(28, 56, 58, 56)
+    elif n == "redact":
+        _page(p)
+        p.setPen(Qt.NoPen)
+        p.setBrush(INK)
+        p.drawRect(QRectF(22, 24, 24, 7))
+        p.drawRect(QRectF(22, 36, 16, 7))
+        p.setPen(_pen(SOFT, 3))
+        p.drawLine(22, 50, 44, 50)
     elif n in ("rot_left", "rot_right"):
         path = QPainterPath()
         path.moveTo(50, 32)

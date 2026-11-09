@@ -5,10 +5,10 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from easydoc.core import multi, text_edit
-from easydoc.core.document import PdfDocument
-from easydoc.core.embedded_fonts import PageFontIndex, drawn_strings, parse_tounicode
-from easydoc.core.fonts import FontRegistry
+from leafwright.core import multi, text_edit
+from leafwright.core.document import PdfDocument
+from leafwright.core.embedded_fonts import PageFontIndex, drawn_strings, parse_tounicode
+from leafwright.core.fonts import FontRegistry
 
 CJK_FAMILY = "Droid Sans Fallback Regular"
 

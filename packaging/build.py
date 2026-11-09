@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build a ready-to-run easydoc bundle for the current OS.
+"""Build a ready-to-run leafwright bundle for the current OS.
 
-    python packaging/build.py            # -> release/easydoc-<version>-<os>-<arch>.{zip,tar.gz,dmg}
+    python packaging/build.py            # -> release/leafwright-<version>-<os>-<arch>.{zip,tar.gz,dmg}
 
 Requires: pip install -e . pyinstaller
 """
@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from easydoc import __version__  # noqa: E402
+from leafwright import __version__  # noqa: E402
 
 DIST = ROOT / "build" / "dist"
 WORK = ROOT / "build" / "work"
@@ -35,31 +35,31 @@ def main() -> int:
     shutil.rmtree(WORK, ignore_errors=True)
     RELEASE.mkdir(exist_ok=True)
     run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
-         "--distpath", str(DIST), "--workpath", str(WORK), str(ROOT / "packaging" / "easydoc.spec")])
+         "--distpath", str(DIST), "--workpath", str(WORK), str(ROOT / "packaging" / "leafwright.spec")])
 
     system = platform.system().lower()
     arch = platform.machine().lower().replace("amd64", "x86_64").replace("aarch64", "arm64")
-    stem = f"easydoc-{__version__}-{system}-{arch}"
+    stem = f"leafwright-{__version__}-{system}-{arch}"
 
     if system == "darwin":
-        app = DIST / "easydoc.app"
+        app = DIST / "leafwright.app"
         out = RELEASE / f"{stem}.dmg"
         if out.exists():
             out.unlink()
         if shutil.which("hdiutil"):
-            run(["hdiutil", "create", "-volname", "EasyDoc", "-srcfolder", str(app), "-ov", "-format", "UDZO", str(out)])
+            run(["hdiutil", "create", "-volname", "Leafwright", "-srcfolder", str(app), "-ov", "-format", "UDZO", str(out)])
         else:  # pragma: no cover
             out = RELEASE / f"{stem}.zip"
             run(["ditto", "-c", "-k", "--keepParent", str(app), str(out)])
     elif system == "windows":
         out = RELEASE / f"{stem}.zip"
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
-            for p in (DIST / "easydoc").rglob("*"):
+            for p in (DIST / "leafwright").rglob("*"):
                 zf.write(p, p.relative_to(DIST))
     else:
         out = RELEASE / f"{stem}.tar.gz"
         with tarfile.open(out, "w:gz") as tf:
-            tf.add(DIST / "easydoc", arcname="easydoc")
+            tf.add(DIST / "leafwright", arcname="leafwright")
     print(f"\nBuilt {out} ({out.stat().st_size / 1e6:.1f} MB)")
     return 0
 

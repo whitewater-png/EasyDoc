@@ -3,8 +3,8 @@ import os
 import pymupdf
 import pytest
 
-from easydoc.core import pages
-from easydoc.core.document import PdfDocument
+from leafwright.core import pages
+from leafwright.core.document import PdfDocument
 
 
 def test_parse_ranges():

@@ -54,7 +54,7 @@ def print_document(pdf: PdfDocument, printer: QPrinter, pnos: Optional[Sequence[
 def print_with_dialog(pdf: PdfDocument, parent=None, current_page: int = 0) -> int:
     """Show the native print dialog and print.  Returns pages printed (0 if cancelled)."""
     printer = QPrinter(QPrinter.PrinterMode.HighResolution)
-    printer.setDocName((pdf.path or "easydoc").rsplit("/", 1)[-1])
+    printer.setDocName((pdf.path or "leafwright").rsplit("/", 1)[-1])
     dlg = QPrintDialog(printer, parent)
     dlg.setMinMax(1, pdf.page_count)
     dlg.setOption(QPrintDialog.PrintDialogOption.PrintPageRange, True)

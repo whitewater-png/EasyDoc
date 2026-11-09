@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for easydoc.  Build with:  pyinstaller packaging/easydoc.spec"""
+"""PyInstaller spec for leafwright.  Build with:  pyinstaller packaging/leafwright.spec"""
 import sys
 from pathlib import Path
 
@@ -9,7 +9,7 @@ ROOT = Path(SPECPATH).parent
 IS_WIN = sys.platform.startswith("win")
 IS_MAC = sys.platform == "darwin"
 
-# Only the PyMuPDF modules easydoc uses.  ``pymupdf.layout`` (a 50 MB ONNX
+# Only the PyMuPDF modules leafwright uses.  ``pymupdf.layout`` (a 50 MB ONNX
 # model) and ``pymupdf.table`` (numpy/pandas) are optional extras we never import.
 hiddenimports = ["pymupdf", "pymupdf.mupdf", "pymupdf.utils", "pymupdf.extra", "pymupdf._extra",
                  "pymupdf._features", "pymupdf.features", "pymupdf.tgif", "pymupdf._tgif", "pymupdf._wxcolors",
@@ -30,13 +30,13 @@ binaries = _slim(collect_dynamic_libs("pymupdf") + collect_dynamic_libs("pikepdf
 datas = _slim(collect_data_files("pymupdf") + collect_data_files("pikepdf"))
 
 icon = None
-if IS_WIN and (ROOT / "packaging" / "easydoc.ico").exists():
-    icon = str(ROOT / "packaging" / "easydoc.ico")
-elif IS_MAC and (ROOT / "packaging" / "easydoc.icns").exists():
-    icon = str(ROOT / "packaging" / "easydoc.icns")
+if IS_WIN and (ROOT / "packaging" / "leafwright.ico").exists():
+    icon = str(ROOT / "packaging" / "leafwright.ico")
+elif IS_MAC and (ROOT / "packaging" / "leafwright.icns").exists():
+    icon = str(ROOT / "packaging" / "leafwright.icns")
 
 a = Analysis(
-    [str(ROOT / "easydoc" / "__main__.py")],
+    [str(ROOT / "leafwright" / "__main__.py")],
     pathex=[str(ROOT)],
     binaries=binaries,
     datas=datas,
@@ -71,7 +71,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="easydoc",
+    name="leafwright",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -85,18 +85,18 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="easydoc",
+    name="leafwright",
 )
 
 if IS_MAC:
     app = BUNDLE(
         coll,
-        name="easydoc.app",
+        name="leafwright.app",
         icon=icon,
-        bundle_identifier="io.github.whitewater-png.easydoc",
+        bundle_identifier="io.github.whitewater-png.leafwright",
         info_plist={
-            "CFBundleName": "EasyDoc",
-            "CFBundleDisplayName": "EasyDoc",
+            "CFBundleName": "Leafwright",
+            "CFBundleDisplayName": "Leafwright",
             "CFBundleShortVersionString": "0.4.0",
             "NSHighResolutionCapable": True,
             "NSPrincipalClass": "NSApplication",

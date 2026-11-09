@@ -6,8 +6,8 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from easydoc.core import multi, text_edit
-from easydoc.core.document import PdfDocument
+from leafwright.core import multi, text_edit
+from leafwright.core.document import PdfDocument
 
 LINES = ["VIM株式会社 御中", "2026年10月動画編集代行", "INV-0000000017", "Hello World 12", "件名"]
 
@@ -60,7 +60,7 @@ def test_group_move_keeps_lines_whole_and_font_stable():
 
 
 def test_nbsp_survives_move():
-    from easydoc.core.fonts import default_registry
+    from leafwright.core.fonts import default_registry
     pdf = PdfDocument.new()
     cjk = default_registry(scan=False).get("CJK Fallback (Droid Sans Fallback)")
     text_edit.write_text(pdf.page(0), pymupdf.Point(60, 100), "VIM株式会社\u00a0御中", cjk, 14)

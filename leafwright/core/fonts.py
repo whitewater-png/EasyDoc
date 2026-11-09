@@ -69,7 +69,7 @@ def system_font_dirs() -> list[Path]:
         for d in xdg.split(os.pathsep):
             if d:
                 dirs.append(Path(d) / "fonts")
-    extra = os.environ.get("EASYDOC_FONT_DIRS", "")
+    extra = os.environ.get("LEAFWRIGHT_FONT_DIRS", "")
     for d in extra.split(os.pathsep):
         if d:
             dirs.append(Path(d))
@@ -88,7 +88,7 @@ def _cache_file() -> Path:
         base = Path.home() / "Library/Caches"
     else:
         base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
-    return base / "easydoc" / "fonts.json"
+    return base / "leafwright" / "fonts.json"
 
 
 def _normalize(name: str) -> str:
@@ -280,7 +280,7 @@ class FontRegistry:
         for f in candidates:
             if _compact(_normalize(f.name)) == key:
                 return f
-        # 2) fonts easydoc itself writes with must map back to the very same font,
+        # 2) fonts leafwright itself writes with must map back to the very same font,
         #    otherwise every move changes the typeface
         if "droid sans fallback" in target:
             return self._fonts["CJK Fallback (Droid Sans Fallback)"]

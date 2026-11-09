@@ -8,7 +8,7 @@ import warnings
 
 def main(argv: list[str] | None = None) -> int:
     warnings.filterwarnings("ignore", category=FutureWarning)
-    parser = argparse.ArgumentParser(prog="EasyDoc", description="Lightweight GUI PDF editor")
+    parser = argparse.ArgumentParser(prog="Leafwright", description="Lightweight GUI PDF editor")
     parser.add_argument("file", nargs="?", help="PDF (or image/XPS/EPUB) to open")
     args = parser.parse_args(argv)
 
@@ -19,8 +19,8 @@ def main(argv: list[str] | None = None) -> int:
     from .ui.theme import apply_theme, install_tooltip_placer
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
-    app.setApplicationName("EasyDoc")
-    app.setOrganizationName("EasyDoc")
+    app.setApplicationName("Leafwright")
+    app.setOrganizationName("Leafwright")
     apply_theme(app)
     install_tooltip_placer(app)
     app.setWindowIcon(logo_icon())

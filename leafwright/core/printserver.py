@@ -1,11 +1,11 @@
 """A tiny "virtual printer": a raw (JetDirect / port 9100 style) print server.
 
-Any application can print to easydoc once the operating system has a printer
+Any application can print to leafwright once the operating system has a printer
 queue whose port points at ``127.0.0.1:<port>``:
 
 * **Windows**: a *Standard TCP/IP port* on 127.0.0.1 with the built-in
   "Microsoft Print To PDF" (or "Microsoft XPS Document Writer") driver.
-* **macOS / Linux (CUPS)**: ``lpadmin -p easydoc -E -v socket://127.0.0.1:9100 -m raw``.
+* **macOS / Linux (CUPS)**: ``lpadmin -p leafwright -E -v socket://127.0.0.1:9100 -m raw``.
   A raw queue forwards the application's own spool data (PDF on macOS and on
   modern Linux desktops) unchanged.
 
@@ -32,7 +32,7 @@ import pymupdf
 from .standards import find_ghostscript
 
 DEFAULT_PORT = 9100
-PRINTER_NAME = "EasyDoc PDF"
+PRINTER_NAME = "Leafwright PDF"
 
 
 def inbox_dir() -> Path:
@@ -42,7 +42,7 @@ def inbox_dir() -> Path:
         base = Path.home() / "Library/Application Support"
     else:
         base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
-    d = base / "easydoc" / "inbox"
+    d = base / "leafwright" / "inbox"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -176,7 +176,7 @@ class PrintServer:
             return self.port
         self._server = _Server((self.host, self.port), self.callback, self.error_callback)
         self.port = self._server.server_address[1]
-        self._thread = threading.Thread(target=self._server.serve_forever, name="easydoc-printserver", daemon=True)
+        self._thread = threading.Thread(target=self._server.serve_forever, name="leafwright-printserver", daemon=True)
         self._thread.start()
         return self.port
 
@@ -194,8 +194,8 @@ def setup_commands(port: int = DEFAULT_PORT, name: str = PRINTER_NAME) -> list[s
     """Shell commands that create a printer queue pointing at the server."""
     if sys.platform.startswith("win"):
         return [
-            f'Add-PrinterPort -Name "easydoc_{port}" -PrinterHostAddress "127.0.0.1" -PortNumber {port}',
-            f'Add-Printer -Name "{name}" -DriverName "Microsoft Print To PDF" -PortName "easydoc_{port}"',
+            f'Add-PrinterPort -Name "leafwright_{port}" -PrinterHostAddress "127.0.0.1" -PortNumber {port}',
+            f'Add-Printer -Name "{name}" -DriverName "Microsoft Print To PDF" -PortName "leafwright_{port}"',
         ]
     queue = name.replace(" ", "_")
     return [f"lpadmin -p {queue} -E -v socket://127.0.0.1:{port} -m raw -o printer-is-shared=false"]
@@ -203,7 +203,7 @@ def setup_commands(port: int = DEFAULT_PORT, name: str = PRINTER_NAME) -> list[s
 
 def remove_commands(port: int = DEFAULT_PORT, name: str = PRINTER_NAME) -> list[str]:
     if sys.platform.startswith("win"):
-        return [f'Remove-Printer -Name "{name}"', f'Remove-PrinterPort -Name "easydoc_{port}"']
+        return [f'Remove-Printer -Name "{name}"', f'Remove-PrinterPort -Name "leafwright_{port}"']
     return [f"lpadmin -x {name.replace(' ', '_')}"]
 
 

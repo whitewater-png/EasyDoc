@@ -1,4 +1,4 @@
-"""The EasyDoc logo: an "E" and a "D" sharing one stem on a gradient squircle."""
+"""The Leafwright logo: an "E" and a "D" sharing one stem on a gradient squircle."""
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt

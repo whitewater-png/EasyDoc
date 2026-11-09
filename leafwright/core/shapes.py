@@ -13,6 +13,7 @@ from typing import Optional, Sequence
 
 import pymupdf
 
+from . import redact
 from .document import PdfDocument
 
 ShapeKind = str  # "rect" | "ellipse" | "line" | "arrow"
@@ -150,13 +151,18 @@ class Drawing:
 
 
 def list_drawings(page: pymupdf.Page) -> list[Drawing]:
+    """Content-stream drawings that can be selected.  Redaction boxes and drawings that
+    cross a redacted area's edge are left out: they must not be moved or deleted."""
     out = []
+    areas = redact.marks(page)
     for d in page.get_drawings():
         r = d.get("rect")
         if r is None:
             continue
         r = pymupdf.Rect(r)
         if r.is_empty or r.is_infinite:
+            continue
+        if areas and redact.is_locked(d, areas):
             continue
         out.append(Drawing(rect=r, kind=d.get("type", "s"), data=d))
     return out
@@ -190,6 +196,7 @@ def delete_drawing(pdf: PdfDocument, pno: int, rect: pymupdf.Rect) -> None:
     page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
                           graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
                           text=pymupdf.PDF_REDACT_TEXT_NONE)
+    redact.repaint(page)
     pdf.mutated()
 
 
@@ -200,6 +207,7 @@ def remove_drawing(page: pymupdf.Page, rect: pymupdf.Rect) -> None:
     page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
                           graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
                           text=pymupdf.PDF_REDACT_TEXT_NONE)
+    redact.repaint(page)
 
 
 def redraw_drawing(page: pymupdf.Page, drawing: Drawing, dx: float, dy: float) -> bool:

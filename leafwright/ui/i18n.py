@@ -6,7 +6,7 @@ import os
 
 _STRINGS: dict[str, tuple[str, str]] = {
     # key: (en, ja)
-    "app.title": ("EasyDoc", "EasyDoc"),
+    "app.title": ("Leafwright", "Leafwright"),
     "menu.file": ("&File", "ファイル(&F)"),
     "menu.edit": ("&Edit", "編集(&E)"),
     "menu.page": ("&Page", "ページ(&P)"),
@@ -22,7 +22,7 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "act.check_update": ("Check for &Updates…", "アップデートを確認(&U)…"),
     "act.auto_update": ("Check for updates at startup", "起動時にアップデートを確認"),
     "dlg.update": ("Update available", "アップデートがあります"),
-    "msg.update_available": ("EasyDoc {0} is available (you have {1}).", "EasyDoc {0} が公開されています(現在 {1})。"),
+    "msg.update_available": ("Leafwright {0} is available (you have {1}).", "Leafwright {0} が公開されています(現在 {1})。"),
     "msg.update_none": ("You are using the latest version ({0}).", "最新バージョン({0})をお使いです。"),
     "msg.update_failed": ("Could not check for updates:\n{0}", "アップデートを確認できませんでした:\n{0}"),
     "btn.update_download": ("Download && open", "ダウンロードして開く"),
@@ -32,9 +32,10 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "msg.update_noasset": ("No package for this OS was found in the release; opening the release page.",
                            "このOS向けのパッケージが見つからないため、リリースページを開きます。"),
     "msg.update_downloading": ("Downloading {0}…", "{0} をダウンロード中…"),
-    "msg.update_done": ("Downloaded to {0}.\nQuit EasyDoc and install it (macOS: drag the app to Applications; Windows/Linux: extract and replace the old folder).",
-                        "{0} にダウンロードしました。\nEasyDoc を終了してから入れ替えてください(macOS: アプリをアプリケーションへドラッグ / Windows・Linux: 展開して旧フォルダと置き換え)。"),
+    "msg.update_done": ("Downloaded to {0}.\nQuit Leafwright and install it (macOS: drag the app to Applications; Windows/Linux: extract and replace the old folder).",
+                        "{0} にダウンロードしました。\nLeafwright を終了してから入れ替えてください(macOS: アプリをアプリケーションへドラッグ / Windows・Linux: 展開して旧フォルダと置き換え)。"),
     "act.edit_sel": ("Edit Selected Text…", "選択したテキストを編集…"),
+    "act.redact_sel": ("Redact Selection", "選択範囲を墨塗り"),
     "act.select_all": ("Select All on Page", "ページ内をすべて選択"),
     "dlg.bulk_text": ("Edit Multiple Texts", "テキストをまとめて変更"),
     "dlg.bulk_count": ("{0} text items selected. Only ticked properties are changed.",
@@ -75,10 +76,25 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "tool.line": ("Line", "直線"),
     "tool.arrow": ("Arrow", "矢印"),
     "tool.erase": ("Erase drawing", "図形を消去"),
+    "tool.redact": ("Redact", "墨塗り"),
+    "lbl.redact_crossing": ("Redact: also remove crossing shapes", "墨塗り: またぐ図形も消す"),
+    "tip.redact_crossing": (
+        "Off (default): shapes crossing the edge of a redacted area (backgrounds, table lines…) are kept, "
+        "hidden under the black box and locked; the hidden part still exists in the file.\n"
+        "On: they are deleted whole so none of their data remains (e.g. a vector signature). "
+        "Side effects OUTSIDE the area: page backgrounds, table frames and nearby thick lines disappear, "
+        "and content hidden under a white rectangle can become visible. Check the page afterwards.",
+        "オフ(既定): 墨塗り範囲の縁をまたぐ図形(背景・罫線など)は残し、黒い箱の下に隠してロックします。"
+        "隠れた部分のデータはファイルに残ります。\n"
+        "オン: またぐ図形を丸ごと削除し、データを一切残しません(ベクターの署名など)。"
+        "ただし範囲の外にも影響します: ページの背景・表の枠・近くの太線が消え、白い四角で隠していた内容が"
+        "見えるようになることがあります。墨塗り後にページを確認してください。"),
     "tip.select": ("Click text to edit it · Shift+click or drag a box to select several · drag to move · Delete removes",
                    "クリックで編集 · Shift+クリック／範囲ドラッグで複数選択 · ドラッグで移動 · Deleteで削除"),
     "tip.shape": ("Drag to draw", "ドラッグして描画"),
     "tip.erase": ("Click an existing vector drawing to remove it", "既存のベクター図形をクリックで消去"),
+    "tip.redact": ("Drag over an area to redact it: text, images and shapes inside are permanently removed (Ctrl+Z undoes until you save)",
+                   "ドラッグした範囲を墨塗り: 中の文字・画像・図形は完全に削除されます(保存前なら Ctrl+Z で戻せます)"),
     "lbl.stroke": ("Stroke", "線色"),
     "lbl.fill": ("Fill", "塗り"),
     "lbl.width": ("Width", "線幅"),
@@ -138,8 +154,8 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "msg.extract_done": ("Extracted {0} pages to {1}", "{0} ページを {1} に抽出しました"),
     "msg.merge_done": ("Added {0} pages", "{0} ページを追加しました"),
     "msg.need_doc": ("Open or create a document first", "先にドキュメントを開くか作成してください"),
-    "msg.about": ("EasyDoc {0}\nLightweight cross-platform PDF editor.\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}",
-                  "EasyDoc {0}\n軽量クロスプラットフォームPDFエディタ\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}"),
+    "msg.about": ("Leafwright {0}\nLightweight cross-platform PDF editor.\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}",
+                  "Leafwright {0}\n軽量クロスプラットフォームPDFエディタ\n\nPyMuPDF {1} · pikepdf {2} · Qt {3}"),
     "filter.pdf": ("PDF files (*.pdf);;All files (*)", "PDFファイル (*.pdf);;すべてのファイル (*)"),
     "filter.open": ("Documents (*.pdf *.xps *.epub *.png *.jpg *.jpeg *.tiff *.svg);;All files (*)",
                     "ドキュメント (*.pdf *.xps *.epub *.png *.jpg *.jpeg *.tiff *.svg);;すべてのファイル (*)"),
@@ -147,7 +163,7 @@ _STRINGS: dict[str, tuple[str, str]] = {
     # printing
     "act.print": ("&Print…", "印刷(&P)…"),
     "act.vprinter": ("Receive print jobs (virtual printer)", "印刷を受け付ける(仮想プリンター)"),
-    "act.vprinter_setup": ("Set up the \"EasyDoc PDF\" printer…", "「EasyDoc PDF」プリンターを設定…"),
+    "act.vprinter_setup": ("Set up the \"Leafwright PDF\" printer…", "「Leafwright PDF」プリンターを設定…"),
     "msg.printed": ("Sent {0} pages to the printer", "{0} ページをプリンターに送信しました"),
     "msg.print_failed": ("Printing failed:\n{0}", "印刷に失敗しました:\n{0}"),
     "msg.vprinter_on": ("Virtual printer listening on 127.0.0.1:{0}", "仮想プリンター待受中 127.0.0.1:{0}"),
@@ -158,12 +174,12 @@ _STRINGS: dict[str, tuple[str, str]] = {
     "msg.job_failed": ("A print job could not be converted:\n{0}", "印刷ジョブを変換できませんでした:\n{0}"),
     "dlg.vprinter": ("Virtual printer setup", "仮想プリンターの設定"),
     "dlg.vprinter_intro": (
-        "Print from Word, Excel, PowerPoint or any other application straight into EasyDoc.\n"
-        "EasyDoc listens on a local network port; the operating system needs a printer queue that "
+        "Print from Word, Excel, PowerPoint or any other application straight into Leafwright.\n"
+        "Leafwright listens on a local network port; the operating system needs a printer queue that "
         "sends its output to that port. Create it once with the command below, then keep "
         "\"Receive print jobs\" switched on while printing.",
-        "Word・Excel・PowerPoint など任意のアプリの「印刷」から、EasyDoc に直接 PDF を送れます。\n"
-        "EasyDoc はローカルのネットワークポートで待ち受けます。OS 側に、そのポートへ出力するプリンター"
+        "Word・Excel・PowerPoint など任意のアプリの「印刷」から、Leafwright に直接 PDF を送れます。\n"
+        "Leafwright はローカルのネットワークポートで待ち受けます。OS 側に、そのポートへ出力するプリンター"
         "キューを 1 回だけ作成してください(下のコマンド)。印刷するときは「印刷を受け付ける」をオンにしておきます。"),
     "dlg.vprinter_port": ("Port", "ポート"),
     "dlg.vprinter_cmd": ("Command (run as administrator / with sudo):", "コマンド(管理者権限 / sudo で実行):"),
@@ -180,9 +196,9 @@ _STRINGS: dict[str, tuple[str, str]] = {
         "XPS や PostScript で届いた場合も自動変換します(PostScript は Ghostscript が必要)。"),
     "dlg.vprinter_note_mac": (
         "macOS: creates a raw CUPS queue; applications send PDF directly. "
-        "(macOS can also \"Save as PDF\" from any print dialog, then open the file in EasyDoc.)",
+        "(macOS can also \"Save as PDF\" from any print dialog, then open the file in Leafwright.)",
         "macOS: raw の CUPS キューを作成します。アプリは PDF をそのまま送ります。"
-        "(macOS の印刷ダイアログ「PDF として保存」→ EasyDoc で開く、でも同じことができます)"),
+        "(macOS の印刷ダイアログ「PDF として保存」→ Leafwright で開く、でも同じことができます)"),
     "dlg.vprinter_note_linux": (
         "Linux: creates a raw CUPS queue; GTK/Qt/LibreOffice applications send PDF directly. "
         "PostScript jobs are converted with Ghostscript.",
@@ -201,7 +217,7 @@ _STRINGS: dict[str, tuple[str, str]] = {
 
 
 def _detect_lang() -> str:
-    forced = os.environ.get("EASYDOC_LANG")
+    forced = os.environ.get("LEAFWRIGHT_LANG")
     if forced:
         return forced[:2].lower()
     try:

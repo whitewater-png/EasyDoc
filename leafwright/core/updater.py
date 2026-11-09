@@ -14,7 +14,7 @@ from typing import Callable, Optional
 
 from .. import __version__
 
-REPO = "whitewater-png/easydoc"
+REPO = "whitewater-png/Leafwright"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_URL = f"https://github.com/{REPO}/releases"
 TIMEOUT = 8
@@ -58,7 +58,7 @@ def _os_tokens() -> tuple[str, tuple[str, ...]]:
 
 
 def pick_asset(release: Release, system: Optional[str] = None, arch: Optional[str] = None) -> Optional[Asset]:
-    """The package built for this OS / CPU (names look like easydoc-0.2.0-darwin-arm64.dmg)."""
+    """The package built for this OS / CPU (names look like leafwright-0.2.0-darwin-arm64.dmg)."""
     if system is None or arch is None:
         d_system, (d_arch,) = _os_tokens()
         system, arch = system or d_system, arch or d_arch
@@ -84,9 +84,9 @@ def _ssl_context() -> ssl.SSLContext:
 
 def fetch_latest(url: Optional[str] = None, timeout: float = TIMEOUT) -> Release:
     """Query the latest published release.  Raises on network / format errors."""
-    url = url or os.environ.get("EASYDOC_UPDATE_URL") or API_URL
+    url = url or os.environ.get("LEAFWRIGHT_UPDATE_URL") or API_URL
     req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
-                                               "User-Agent": f"EasyDoc/{__version__}"})
+                                               "User-Agent": f"Leafwright/{__version__}"})
     with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as resp:  # noqa: S310 - fixed https endpoint
         data = json.loads(resp.read().decode("utf-8"))
     return parse_release(data)
@@ -119,7 +119,7 @@ def download(asset: Asset, dest_dir: str | Path, progress: Optional[Callable[[in
     dest_dir.mkdir(parents=True, exist_ok=True)
     target = dest_dir / Path(asset.name).name        # never trust path components from the network
     part = target.with_suffix(target.suffix + ".part")
-    req = urllib.request.Request(asset.url, headers={"User-Agent": f"EasyDoc/{__version__}"})
+    req = urllib.request.Request(asset.url, headers={"User-Agent": f"Leafwright/{__version__}"})
     done = 0
     with urllib.request.urlopen(req, timeout=TIMEOUT, context=_ssl_context()) as resp, open(part, "wb") as fh:  # noqa: S310
         total = int(resp.headers.get("Content-Length") or asset.size or 0)

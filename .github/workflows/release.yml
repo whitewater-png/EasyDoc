@@ -43,10 +43,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          ./build/dist/easydoc/easydoc --help
+          ./build/dist/leafwright/leafwright --help
       - uses: actions/upload-artifact@v4
         with:
-          name: easydoc-${{ matrix.os }}
+          name: leafwright-${{ matrix.os }}
           path: ${{ matrix.artifact }}
           if-no-files-found: error
 

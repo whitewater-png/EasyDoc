@@ -24,6 +24,7 @@ class Tool(Enum):
     LINE = "line"
     ARROW = "arrow"
     ERASE = "erase"
+    REDACT = "redact"
 
 
 SNAP_PX = 7  # snap distance in screen pixels
@@ -427,6 +428,9 @@ class PageView(QGraphicsView):
             self._rubber = QGraphicsEllipseItem(QRectF(scene_pt, scene_pt))
         else:
             self._rubber = QGraphicsRectItem(QRectF(scene_pt, scene_pt))
+        if self.tool is Tool.REDACT:
+            pen = QPen(QColor(0, 0, 0), 1.5, Qt.DashLine)
+            self._rubber.setBrush(QBrush(QColor(0, 0, 0, 110)))
         self._rubber.setPen(pen)
         self._scene.addItem(self._rubber)
 

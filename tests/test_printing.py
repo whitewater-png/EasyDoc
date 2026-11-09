@@ -9,17 +9,17 @@ import pymupdf
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("EASYDOC_LANG", "en")
+os.environ.setdefault("LEAFWRIGHT_LANG", "en")
 
-from easydoc.core import printserver, standards  # noqa: E402
-from easydoc.core.document import PdfDocument  # noqa: E402
+from leafwright.core import printserver, standards  # noqa: E402
+from leafwright.core.document import PdfDocument  # noqa: E402
 
 
 def test_print_document_to_pdf_printer(sample_pdf, tmp_path):
     QtWidgets = pytest.importorskip("PySide6.QtWidgets")
     from PySide6.QtPrintSupport import QPrinter
 
-    from easydoc.ui import printing
+    from leafwright.ui import printing
 
     QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     pdf = PdfDocument.open(sample_pdf)

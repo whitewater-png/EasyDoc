@@ -8,6 +8,7 @@ from typing import Iterable, Sequence
 
 import pymupdf
 
+from . import redact
 from .document import PdfDocument
 
 # Standard page sizes in PDF points (1/72 inch).
@@ -114,6 +115,7 @@ def merge_files(pdf: PdfDocument, paths: Sequence[str | Path], insert_at: int = 
             if not src.is_pdf:
                 src = pymupdf.open("pdf", src.convert_to_pdf())
             pdf.doc.insert_pdf(src, start_at=at)
+            redact.copy_marks(src, range(src.page_count), pdf.doc, at)
             at += src.page_count
             added += src.page_count
         finally:
@@ -131,6 +133,7 @@ def merge_paths_to_file(paths: Sequence[str | Path], out_path: str | Path) -> in
         if not src.is_pdf:
             src = pymupdf.open("pdf", src.convert_to_pdf())
         out.insert_pdf(src)
+        redact.copy_marks(src, range(src.page_count), out, total)
         total += src.page_count
         src.close()
     out.save(str(out_path), garbage=3, deflate=True)
@@ -141,8 +144,9 @@ def merge_paths_to_file(paths: Sequence[str | Path], out_path: str | Path) -> in
 def extract_pages(pdf: PdfDocument, pnos: Sequence[int], out_path: str | Path) -> None:
     """Write the selected pages (in the given order) to a new file."""
     out = pymupdf.open()
-    for pno in pnos:
+    for k, pno in enumerate(pnos):
         out.insert_pdf(pdf.doc, from_page=pno, to_page=pno)
+        redact.copy_marks(pdf.doc, [pno], out, k)
     out.save(str(out_path), garbage=3, deflate=True)
     out.close()
 
@@ -158,6 +162,7 @@ def split_every(pdf: PdfDocument, n: int, out_dir: str | Path, prefix: str = "pa
         end = min(start + n, total) - 1
         out = pymupdf.open()
         out.insert_pdf(pdf.doc, from_page=start, to_page=end)
+        redact.copy_marks(pdf.doc, range(start, end + 1), out, 0)
         fname = os.path.join(str(out_dir), f"{prefix}_{idx:03d}.pdf")
         out.save(fname, garbage=3, deflate=True)
         out.close()

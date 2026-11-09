@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "easydoc"
+name = "leafwright"
 version = "0.4.0"
 description = "Lightweight cross-platform GUI PDF editor (text, shapes, pages, PDF/A & PDF/X export)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "EasyDoc contributors" }]
+authors = [{ name = "Leafwright contributors" }]
 dependencies = [
     "PyMuPDF>=1.24",
     "pikepdf>=8.0",
@@ -21,13 +21,13 @@ dependencies = [
 dev = ["pytest>=7"]
 
 [project.scripts]
-easydoc = "easydoc.app:main"
+leafwright = "leafwright.app:main"
 
 [project.gui-scripts]
-easydoc-gui = "easydoc.app:main"
+leafwright-gui = "leafwright.app:main"
 
 [tool.setuptools.packages.find]
-include = ["easydoc*"]
+include = ["leafwright*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
